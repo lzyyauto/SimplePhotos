@@ -1,0 +1,78 @@
+# Python bytecode files
+__pycache__/
+*.py[cod]
+
+# C extensions
+*.cpython-*-* 
+
+# Distribution / packaging
+.Python
+build/
+dist/
+*.egg-info/
+*.eggs/
+*.whl
+
+# Virtual environment
+venv/
+ENV/
+env/
+.venv/
+# Python 3.10 venv specific folder
+python3*/
+
+# VS Code settings
+.vscode/
+
+# PyCharm settings
+.idea/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Mac OS X
+.DS_Store
+
+# Windows OS
+Thumbs.db
+
+# pytest
+.cache/
+
+# Coverage reports
+coverage.xml
+*.cover
+*.tox/
+.nox/
+.coverage
+*.hypothesis/
+
+# Mypy
+.mypy_cache/
+
+# Pytest
+*.log
+*.pytest_cache/
+
+# Docker
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Environment variables
+.env
+.env.*.local
+
+# Flask instance folder
+instance/
+
+# PyInstaller
+*.spec
+
+# Jupyter Notebook Checkpoints
+.ipynb_checkpoints/
+
+# Logs
+logs/
+
+# Data
+data/

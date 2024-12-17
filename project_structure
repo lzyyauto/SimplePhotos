@@ -1,0 +1,23 @@
+.
+├── app/
+│   ├── __init__.py
+│   ├── main.py
+│   ├── config.py
+│   ├── database/
+│   │   ├── __init__.py
+│   │   ├── models.py
+│   │   └── database.py
+│   ├── services/
+│   │   ├── __init__.py
+│   │   ├── file_service.py
+│   │   ├── image_service.py
+│   │   └── cache_service.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── routes.py
+│   │   └── schemas.py
+│   └── utils/
+│       ├── __init__.py
+│       └── image_utils.py
+├── requirements.txt
+└── config.yaml 
