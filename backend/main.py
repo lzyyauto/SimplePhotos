@@ -1,16 +1,15 @@
 import contextlib
 
 import uvicorn
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-
 from app.api.routes import router
 from app.config import settings
 from app.database import models
 from app.database.database import engine, get_db
 from app.services.init_service import InitializationService
 from app.utils.logger import logger
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 # 创建数据库表
 logger.info("正在创建数据库表...")
@@ -40,6 +39,32 @@ async def lifespan(app: FastAPI):
     finally:
         print("lifespan finally")
 
+
+# 配置 uvicorn 访问日志
+logging_config = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "default": {
+            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            "datefmt": "%Y-%m-%d %H:%M:%S",
+        },
+    },
+    "handlers": {
+        "default": {
+            "formatter": "default",
+            "class": "logging.StreamHandler",
+            "stream": "ext://sys.stderr",
+        },
+    },
+    "loggers": {
+        "uvicorn.access": {
+            "handlers": ["default"],
+            "level": "WARNING",  # 将访问日志级别改为 WARNING
+            "propagate": False,
+        },
+    },
+}
 
 # 先定义 lifespan 函数，再创建 FastAPI 实例
 app = FastAPI(
@@ -73,4 +98,8 @@ app.include_router(router, prefix="/api")
 
 if __name__ == "__main__":
     logger.info("正在启动应用服务器...")
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app",
+                host="0.0.0.0",
+                port=8000,
+                reload=True,
+                log_config=logging_config)

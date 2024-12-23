@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # 基础路径配置
     BASE_DIR: Path = Path(__file__).parent.parent.parent
-    DATA_DIR: Path = BASE_DIR / "data"
+    DATA_DIR: Path = Path("/app/data")
 
     # 数据库配置
     DATABASE_URL: str = f"sqlite:///{DATA_DIR}/images.db"
@@ -41,13 +41,15 @@ class Settings(BaseSettings):
     API_THUMBNAILS_PATH: str = "/data/thumbnails"
     API_CONVERTED_PATH: str = "/data/converted"
 
-    def setup_directories(self):
-        """创建必要的目录结构"""
+    def setup_directories(self) -> None:
+        """验证所有必要的目录存在"""
         for path in [
                 self.DATA_DIR, self.IMAGES_DIR, self.CACHE_DIR,
                 self.THUMBNAIL_DIR, self.CONVERTED_DIR
         ]:
-            path.mkdir(parents=True, exist_ok=True)
+            if not path.exists():
+                raise RuntimeError(
+                    f"Required directory does not exist: {path}")
 
     class Config:
         env_file = ".env"

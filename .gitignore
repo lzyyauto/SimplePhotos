@@ -58,7 +58,7 @@ docker-compose.local.yml
 # Application Specific
 instance/           # Flask
 *.spec             # PyInstaller
-data/              # Data directory
+data/             # Data directory
 
 # Operating System
 .DS_Store          # macOS

@@ -1,15 +1,16 @@
 import asyncio
 import os
+import time
 from typing import Generator, List
-
-from sqlalchemy.orm import Session
-from watchdog.events import FileSystemEventHandler
-from watchdog.observers import Observer
 
 from app.config import settings
 from app.database.models import Folder, Image
 from app.services.image_service import ImageService
 from app.utils.logger import logger
+from sqlalchemy.orm import Session
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
+from watchdog.observers.polling import PollingObserver
 
 
 class FileWatcher(FileSystemEventHandler):
@@ -108,10 +109,19 @@ class FileService:
 
         logger.info(f"开始监控目录: {path}")
         event_handler = FileWatcher(self.db, self.image_service)
-        self.observer = Observer()
-        self.observer.schedule(event_handler, path, recursive=True)
-        self.observer.start()
-        logger.info("文件监控服务已启动")
+
+        # 尝试使用默认 Observer，如果失败则使用 PollingObserver
+        try:
+            self.observer = Observer()
+            self.observer.schedule(event_handler, path, recursive=True)
+            self.observer.start()
+            logger.info("使用系统原生文件监控服务")
+        except Exception as e:
+            logger.warning(f"系统原生监控启动失败: {e}，切换到轮询模式")
+            self.observer = PollingObserver(timeout=2)
+            self.observer.schedule(event_handler, path, recursive=True)
+            self.observer.start()
+            logger.info("使用轮询模式监控服务")
 
     def stop_watching(self):
         """停止文件监控"""

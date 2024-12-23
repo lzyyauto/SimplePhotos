@@ -1,0 +1,15 @@
+services:
+  simplephotos:
+    image: lzyyauto/simplephotos:latest
+    ports:
+      - "5173:5173"
+    volumes:
+      -  /Users/zingliu/Code/SimplePhotos/data:/app/data
+    environment:
+      - NODE_ENV=production
+      - LANG=zh_CN.UTF-8
+      - LC_ALL=zh_CN.UTF-8
+
+volumes:
+  data:
+    driver: local

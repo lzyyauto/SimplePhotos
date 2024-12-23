@@ -1,19 +1,19 @@
 import os
 from pathlib import Path
-from typing import List, Tuple
-
-from sqlalchemy.orm import Session
+from typing import Tuple
 
 from app.config import settings
 from app.database.models import Base, Folder, Image
 from app.services.file_service import FileService
 from app.services.image_service import ImageService
 from app.utils.logger import logger
+from sqlalchemy.engine import Engine
+from sqlalchemy.orm import Session
 
 
 class InitializationService:
 
-    def __init__(self, db: Session, engine):
+    def __init__(self, db: Session, engine: Engine):
         self.db = db
         self.engine = engine
         self.file_service = FileService(db)
@@ -104,3 +104,42 @@ class InitializationService:
             logger.error(f"全盘扫描失败: {str(e)}")
             self.db.rollback()
             raise e
+
+    async def scan_directory(self, directory: Path) -> Tuple[int, int]:
+        folders_count = 0
+        images_count = 0
+        try:
+            directory = Path(directory)
+            with os.scandir(str(directory)) as entries:
+                for entry in entries:
+                    try:
+                        entry_path = Path(entry.path)
+                        if entry.is_dir():
+                            print(f"扫描目录: {entry_path}")
+                            folders_count += 1
+                            # 递归扫描子目录
+                            sub_folders, sub_images = await self.scan_directory(
+                                entry_path)
+                            folders_count += sub_folders
+                            images_count += sub_images
+                        elif entry.is_file():
+                            print(f"扫描文件: {entry_path}")
+                            if self.is_supported_format(entry_path):
+                                images_count += 1
+                    except UnicodeEncodeError as e:
+                        print(f"编码错误: {e}")
+                        continue
+                    except Exception as e:
+                        print(f"处理错误: {e}")
+                        continue
+        except Exception as e:
+            print(f"扫描目录错误: {e}")
+
+        return folders_count, images_count
+
+    def is_supported_format(self, file_path: Path) -> bool:
+        return file_path.suffix.lower() in [
+            '.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif', '.mp4'
+        ]
+
+    # ... 其他代码 ...
