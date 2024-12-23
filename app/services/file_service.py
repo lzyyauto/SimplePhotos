@@ -22,21 +22,38 @@ class FileWatcher(FileSystemEventHandler):
 
     def on_created(self, event):
         if not event.is_directory and self._is_valid_image(event.src_path):
-            logger.info(f"检测到新文件: {event.src_path}")
-            try:
-                # 获取文件所在文件夹
-                rel_path = os.path.relpath(os.path.dirname(event.src_path),
-                                           settings.IMAGES_DIR)
-                folder = self.db.query(Folder).filter(
-                    Folder.folder_path == rel_path).first()
+            # 使用 call_later 调用同步方法，该方法内部创建异步任务
+            self.loop.call_later(10, self._schedule_process_file,
+                                 event.src_path)
 
-                if folder:
-                    # 使用事件循环运行异步任务
-                    self.loop.create_task(
-                        self.image_service.process_image(event.src_path,
-                                                         folder_id=folder.id))
-            except Exception as e:
-                logger.error(f"处理新文件失败: {str(e)}")
+    def _schedule_process_file(self, file_path: str):
+        """创建异步任务来处理文件"""
+        asyncio.create_task(self._process_new_file(file_path))
+
+    async def _process_new_file(self, file_path: str):
+        try:
+            # 检查文件是否存在且可读
+            if not os.path.exists(file_path):
+                logger.warning(f"文件不存在: {file_path}")
+                return
+
+            # 检查文件大小是否为0
+            if os.path.getsize(file_path) == 0:
+                logger.warning(f"文件大小为0: {file_path}")
+                return
+
+            # 获取文件所在文件夹
+            rel_path = os.path.relpath(os.path.dirname(file_path),
+                                       settings.IMAGES_DIR)
+            folder = self.db.query(Folder).filter(
+                Folder.folder_path == rel_path).first()
+
+            if folder:
+                await self.image_service.process_image(file_path,
+                                                       folder_id=folder.id)
+                logger.info(f"成功处理新文件: {file_path}")
+        except Exception as e:
+            logger.error(f"处理新文件失败: {file_path}, 错误: {str(e)}")
 
     def on_deleted(self, event):
         if not event.is_directory and self._is_valid_image(event.src_path):
@@ -67,7 +84,7 @@ class FileService:
 
     def _setup_cache_dirs(self):
         """创建必要的缓存目录"""
-        logger.info("创建缓存���录")
+        logger.info("创建缓存目录")
         os.makedirs(settings.CACHE_DIR, exist_ok=True)
         os.makedirs(settings.THUMBNAIL_DIR, exist_ok=True)
         os.makedirs(settings.CONVERTED_DIR, exist_ok=True)

@@ -1,4 +1,5 @@
 import os
+import uuid
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -24,26 +25,46 @@ class ImageService:
         try:
             logger.info(f"开始处理图片: {file_path}")
 
-            # 生成缓存路径
-            filename = os.path.basename(file_path)
-            thumb_path = os.path.join(settings.THUMBNAIL_DIR,
-                                      f"thumb_{filename}.jpg")
+            # 生成唯一的文件名
+            file_name = os.path.basename(file_path)
+            name, ext = os.path.splitext(file_name)
+            unique_id = str(uuid.uuid4())[:8]
+
+            # 初始化路径变量
+            thumbnail_path = None
+            converted_path = None
+
+            # 根据图片类型设置路径 (统一使用 jpg 作为缩略图格式)
+            if image_type == 'thumbnail':
+                thumbnail_name = f"{name}_{unique_id}_thumb.jpg"  # 强制使用 jpg
+                thumbnail_path = os.path.join(settings.THUMBNAIL_DIR,
+                                              thumbnail_name)
+            elif image_type == 'converted':
+                converted_name = f"{name}_{unique_id}_converted.jpg"
+                converted_path = os.path.join(settings.CONVERTED_DIR,
+                                              converted_name)
 
             # 检查是否是HEIC文件
             is_heic = file_path.lower().endswith(('.heic', '.heif'))
-            converted_path = None
 
             if is_heic:
                 logger.info(f"转换HEIC文件: {file_path}")
-                converted_path = os.path.join(
-                    settings.CONVERTED_DIR,
-                    f"{os.path.splitext(filename)[0]}.jpg")
+                if not converted_path:
+                    converted_name = f"{name}_{unique_id}_converted.jpg"
+                    converted_path = os.path.join(settings.CONVERTED_DIR,
+                                                  converted_name)
                 await self.processor.convert_heic(file_path, converted_path)
 
+            # 生成缩略图（如果还没有设置缩略图路径）
+            if not thumbnail_path:
+                thumbnail_name = f"{name}_{unique_id}_thumb.jpg"  # 强制使用 jpg
+                thumbnail_path = os.path.join(settings.THUMBNAIL_DIR,
+                                              thumbnail_name)
+
             # 创建缩略图
-            logger.info(f"生成缩略图: {thumb_path}")
+            logger.info(f"生成缩略图: {thumbnail_path}")
             source_path = converted_path if is_heic else file_path
-            await self.processor.create_thumbnail(source_path, thumb_path)
+            await self.processor.create_thumbnail(source_path, thumbnail_path)
 
             # 读取EXIF数据
             logger.info(f"读取EXIF数据: {file_path}")
@@ -51,7 +72,7 @@ class ImageService:
 
             # 创建数据库记录
             image = Image(file_path=file_path,
-                          thumbnail_path=thumb_path,
+                          thumbnail_path=thumbnail_path,
                           exif_data=exif_data,
                           is_heic=is_heic,
                           converted_path=converted_path,
@@ -73,7 +94,7 @@ class ImageService:
 
     async def get_image(self, image_id: int) -> Optional[Image]:
         """获取图片信息"""
-        logger.info(f"获取图片信息: ID={image_id}")
+        logger.info(f"获���图片信息: ID={image_id}")
         return self.db.query(Image).filter(Image.id == image_id).first()
 
     async def delete_image(self, image_id: int) -> bool:
