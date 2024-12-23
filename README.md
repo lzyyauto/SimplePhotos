@@ -1,6 +1,6 @@
 # SimplePhotos Backend Service
 
-    [中文版](README_zh.md)
+[中文文档](README_zh.md)
 
 ## Project Overview
 

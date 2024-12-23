@@ -1,6 +1,6 @@
 # SimplePhotos 后端服务
 
-    [English](README.md)
+[English](README.md)
 
 ## 项目概述
 
