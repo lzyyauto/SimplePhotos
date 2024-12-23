@@ -22,33 +22,23 @@
 
 ## 快速开始
 
-### 后端
+```yaml
+services:
+  simplephotos:
+    image: lzyyauto/simplephotos:latest
+    ports:
+      - "5173:5173"
+    volumes:
+      - ${PWD}/data:/app/data
+    environment:
+      - NODE_ENV=production
+      - LANG=zh_CN.UTF-8
+      - LC_ALL=zh_CN.UTF-8
 
-```bash
-cd [项目目录]
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-uvicorn main:app --reload
+volumes:
+  data:
+    driver: local
 ```
-
-### 前端
-
-```bash
-cd frontend  # 假设前端在项目根目录的 'frontend' 目录下
-npm install  # 或 yarn install / pnpm install
-npm run dev   # 或 yarn dev / pnpm dev
-```
-
-## API
-
-- **GET /api/folders**: 获取文件夹列表
-- **GET /api/folders/{folder_id}/images**: 获取文件夹中的图像和视频
-- **GET /api/folders/{parent_id}/subfolders**: 获取子文件夹
-- **GET /api/images/{image_id}**: 获取图像/视频详情
-- **GET /api/images/{image_id}/full**: 获取完整图像/视频
-- **POST /api/scan**: 触发完整扫描
 
 ## 未来展望
 

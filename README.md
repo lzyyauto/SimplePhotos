@@ -22,33 +22,23 @@ This project was initially created as a personal solution for managing my photos
 
 ## Quick Start
 
-### Backend
+```yaml
+services:
+  simplephotos:
+    image: lzyyauto/simplephotos:latest
+    ports:
+      - "5173:5173"
+    volumes:
+      - ${PWD}/data:/app/data
+    environment:
+      - NODE_ENV=production
+      - LANG=zh_CN.UTF-8
+      - LC_ALL=zh_CN.UTF-8
 
-```bash
-cd [project directory]
-python -m venv venv
-source venv/bin/activate  # Linux/macOS
-venv\Scripts\activate  # Windows
-pip install -r requirements.txt
-uvicorn main:app --reload
+volumes:
+  data:
+    driver: local
 ```
-
-### Frontend
-
-```bash
-cd frontend  # Assuming the frontend is in the 'frontend' directory at the project root
-npm install  # or yarn install / pnpm install
-npm run dev   # or yarn dev / pnpm dev
-```
-
-## API
-
-- **GET /api/folders**: Get a list of folders
-- **GET /api/folders/{folder_id}/images**: Get images and videos in a folder
-- **GET /api/folders/{parent_id}/subfolders**: Get subfolders of a folder
-- **GET /api/images/{image_id}**: Get image/video details
-- **GET /api/images/{image_id}/full**: Get the full image/video
-- **POST /api/scan**: Trigger a full scan
 
 ## Future Outlook
 
