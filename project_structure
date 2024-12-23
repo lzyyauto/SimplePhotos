@@ -25,13 +25,13 @@
 │   ├── package.json
 │   └── requirements.txt
 ├── frontend
-│   ├── README.md
 │   ├── eslint.config.js
 │   ├── index.html
 │   ├── package-lock.json
 │   ├── package.json
 │   ├── postcss.config.js
 │   ├── public
+│   │   ├── simple-photos-icon.svg
 │   │   └── vite.svg
 │   ├── src
 │   │   ├── App.css
@@ -46,6 +46,7 @@
 │   │   │   │   ├── ImageGrid.tsx
 │   │   │   │   └── ImageViewer.tsx
 │   │   │   ├── Loading
+│   │   │   │   ├── GlobalLoading.tsx
 │   │   │   │   └── Spinner.tsx
 │   │   │   └── UI
 │   │   │       ├── Button.tsx
