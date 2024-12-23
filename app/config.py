@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     SUPPORTED_LANGUAGES: List[str] = ["en", "zh"]
     DEFAULT_LANGUAGE: str = "zh"
 
+    # 分页配置
+    PAGE_SIZE: int = 50
+
     def setup_directories(self):
         """创建必要的目录结构"""
         for path in [
