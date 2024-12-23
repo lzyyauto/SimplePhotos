@@ -1,78 +1,74 @@
-# Python bytecode files
+# Python
 __pycache__/
 *.py[cod]
-
-# C extensions
-*.cpython-*-* 
-
-# Distribution / packaging
+*.cpython-*-*
 .Python
-build/
-dist/
 *.egg-info/
 *.eggs/
 *.whl
 
-# Virtual environment
+# Virtual Environments
 venv/
 ENV/
 env/
 .venv/
-# Python 3.10 venv specific folder
 python3*/
 
-# VS Code settings
+# IDE Settings
 .vscode/
-
-# PyCharm settings
+!.vscode/extensions.json
 .idea/
 
-# Jupyter Notebook
+# Jupyter
 .ipynb_checkpoints/
 
-# Mac OS X
-.DS_Store
-
-# Windows OS
-Thumbs.db
-
-# pytest
+# Testing & Coverage
+.pytest_cache/
 .cache/
-
-# Coverage reports
 coverage.xml
 *.cover
-*.tox/
+.tox/
 .nox/
 .coverage
-*.hypothesis/
-
-# Mypy
+.hypothesis/
 .mypy_cache/
 
-# Pytest
+# Logs
+logs/
 *.log
-*.pytest_cache/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Build & Distribution
+build/
+dist/
+dist-ssr/
 
 # Docker
 docker-compose.override.yml
 docker-compose.local.yml
 
-# Environment variables
+# Environment Variables
 .env
 .env.*.local
 
-# Flask instance folder
-instance/
+# Application Specific
+instance/           # Flask
+*.spec             # PyInstaller
+data/              # Data directory
 
-# PyInstaller
-*.spec
+# Operating System
+.DS_Store          # macOS
+Thumbs.db          # Windows
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
 
-# Jupyter Notebook Checkpoints
-.ipynb_checkpoints/
-
-# Logs
-logs/
-
-# Data
-data/
+# Node.js
+node_modules/
+*.local

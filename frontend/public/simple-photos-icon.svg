@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- 背景圆形 -->
+  <circle cx="50" cy="50" r="48" fill="#4A90E2"/>
+  
+  <!-- 相机主体 -->
+  <rect x="25" y="35" width="50" height="35" rx="5" fill="#FFFFFF"/>
+  
+  <!-- 相机顶部突起部分 -->
+  <rect x="40" y="30" width="20" height="5" rx="2" fill="#FFFFFF"/>
+  
+  <!-- 镜头 -->
+  <circle cx="50" cy="52.5" r="12" fill="#2C3E50"/>
+  <circle cx="50" cy="52.5" r="8" fill="#34495E"/>
+  <circle cx="47" cy="49.5" r="2" fill="#FFFFFF" opacity="0.6"/>
+  
+  <!-- 闪光灯 -->
+  <circle cx="70" cy="42" r="3" fill="#FFD700"/>
+</svg>

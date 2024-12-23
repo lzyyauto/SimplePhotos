@@ -22,6 +22,7 @@ class Image(BaseModel):
     is_heic: bool
     is_thumbnail: bool
     image_type: str
+    thumbnail_path: Optional[str] = None
 
     @computed_field
     def preview_url(self) -> str:
@@ -53,8 +54,8 @@ class Folder(BaseModel):
 
     @computed_field
     def has_subfolders(self) -> bool:
-        """是否有子文件夹（用于前端显示展开图标）"""
-        return True  # 这里可以优化，通过查询实际确定
+        """是否有子文件夹"""
+        return True  # 可以优化为实际查询
 
     class Config:
         from_attributes = True
@@ -68,6 +69,14 @@ class FolderStructure(BaseModel):
 
 class PaginatedImageResponse(BaseModel):
     items: List[Image]
+    total: int
+    page: int
+    total_pages: int
+    page_size: int
+
+
+class PaginatedFolderResponse(BaseModel):
+    items: List[Folder]
     total: int
     page: int
     total_pages: int

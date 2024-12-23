@@ -3,6 +3,7 @@ import contextlib
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import router
 from app.config import settings
@@ -55,6 +56,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 挂载所有静态文件目录
+app.mount("/data/images",
+          StaticFiles(directory=str(settings.IMAGES_DIR)),
+          name="images")
+app.mount("/data/thumbnails",
+          StaticFiles(directory=str(settings.THUMBNAIL_DIR)),
+          name="thumbnails")
+app.mount("/data/converted",
+          StaticFiles(directory=str(settings.CONVERTED_DIR)),
+          name="converted")
 
 # 注册路由
 app.include_router(router, prefix="/api")

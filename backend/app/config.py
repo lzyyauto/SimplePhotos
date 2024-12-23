@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # 基础路径配置
-    BASE_DIR: Path = Path(__file__).parent.parent
+    BASE_DIR: Path = Path(__file__).parent.parent.parent
     DATA_DIR: Path = BASE_DIR / "data"
 
     # 数据库配置
@@ -35,6 +35,11 @@ class Settings(BaseSettings):
 
     # 分页配置
     PAGE_SIZE: int = 50
+
+    # API 路径配置
+    API_IMAGES_PATH: str = "/data/images"
+    API_THUMBNAILS_PATH: str = "/data/thumbnails"
+    API_CONVERTED_PATH: str = "/data/converted"
 
     def setup_directories(self):
         """创建必要的目录结构"""

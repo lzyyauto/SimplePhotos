@@ -1,24 +1,76 @@
 .
 ├── PronjectInfo.md
-├── __init__.py
-├── app
-│   ├── api
-│   │   ├── routes.py
-│   │   └── schemas.py
-│   ├── config.py
-│   ├── database
-│   │   ├── database.py
-│   │   └── models.py
-│   ├── services
-│   │   ├── cache_service.py
-│   │   ├── file_service.py
-│   │   ├── image_service.py
-│   │   └── init_service.py
-│   └── utils
-│       ├── image_utils.py
-│       └── logger.py
+├── README.md
+├── README_zh.md
+├── backend
+│   ├── __init__.py
+│   ├── app
+│   │   ├── api
+│   │   │   ├── routes.py
+│   │   │   └── schemas.py
+│   │   ├── config.py
+│   │   ├── database
+│   │   │   ├── database.py
+│   │   │   └── models.py
+│   │   ├── services
+│   │   │   ├── cache_service.py
+│   │   │   ├── file_service.py
+│   │   │   ├── image_service.py
+│   │   │   └── init_service.py
+│   │   └── utils
+│   │       ├── image_utils.py
+│   │       └── logger.py
+│   ├── main.py
+│   ├── package-lock.json
+│   ├── package.json
+│   └── requirements.txt
+├── frontend
+│   ├── README.md
+│   ├── eslint.config.js
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   ├── postcss.config.js
+│   ├── public
+│   │   └── vite.svg
+│   ├── src
+│   │   ├── App.css
+│   │   ├── App.tsx
+│   │   ├── assets
+│   │   │   └── react.svg
+│   │   ├── components
+│   │   │   ├── Gallery
+│   │   │   │   ├── FolderCard.tsx
+│   │   │   │   ├── FolderGrid.tsx
+│   │   │   │   ├── ImageCard.tsx
+│   │   │   │   ├── ImageGrid.tsx
+│   │   │   │   └── ImageViewer.tsx
+│   │   │   ├── Loading
+│   │   │   │   └── Spinner.tsx
+│   │   │   └── UI
+│   │   │       ├── Button.tsx
+│   │   │       ├── Pagination.tsx
+│   │   │       ├── SettingsMenu.tsx
+│   │   │       └── ThemeToggle.tsx
+│   │   ├── index.css
+│   │   ├── main.tsx
+│   │   ├── pages
+│   │   │   ├── Folder.tsx
+│   │   │   └── Home.tsx
+│   │   ├── services
+│   │   │   └── api.ts
+│   │   ├── stores
+│   │   │   └── settingsStore.ts
+│   │   ├── styles
+│   │   │   └── globals.css
+│   │   ├── types
+│   │   │   └── index.ts
+│   │   └── vite-env.d.ts
+│   ├── tailwind.config.js
+│   ├── tsconfig.app.json
+│   ├── tsconfig.json
+│   ├── tsconfig.node.json
+│   └── vite.config.ts
 ├── logs
 │   └── app.log
-├── main.py
-├── project_structure
-└── requirements.txt
+└── project_structure

@@ -1,0 +1,21 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100;
+  }
+}
+
+.image-grid {
+  @apply grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4;
+}
+
+.image-card {
+  @apply relative aspect-square overflow-hidden rounded-lg bg-gray-100 dark:bg-gray-800;
+}
+
+.loading-skeleton {
+  @apply animate-pulse bg-gray-200 dark:bg-gray-700;
+} 
