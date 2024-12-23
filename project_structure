@@ -1,23 +1,24 @@
 .
-├── app/
-│   ├── __init__.py
-│   ├── main.py
-│   ├── config.py
-│   ├── database/
-│   │   ├── __init__.py
-│   │   ├── models.py
-│   │   └── database.py
-│   ├── services/
-│   │   ├── __init__.py
-│   │   ├── file_service.py
-│   │   ├── image_service.py
-│   │   └── cache_service.py
-│   ├── api/
-│   │   ├── __init__.py
+├── PronjectInfo.md
+├── __init__.py
+├── app
+│   ├── api
 │   │   ├── routes.py
 │   │   └── schemas.py
-│   └── utils/
-│       ├── __init__.py
-│       └── image_utils.py
-├── requirements.txt
-└── config.yaml 
+│   ├── config.py
+│   ├── database
+│   │   ├── database.py
+│   │   └── models.py
+│   ├── services
+│   │   ├── cache_service.py
+│   │   ├── file_service.py
+│   │   ├── image_service.py
+│   │   └── init_service.py
+│   └── utils
+│       ├── image_utils.py
+│       └── logger.py
+├── logs
+│   └── app.log
+├── main.py
+├── project_structure
+└── requirements.txt
