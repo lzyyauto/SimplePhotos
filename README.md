@@ -1,8 +1,12 @@
 # SimplePhotos - Simple Photo Hub
 
+[中文](README_zh.md)
+
 A web application for browsing and managing your photos and videos organized in a folder structure. Powered by a Python (FastAPI) backend and a React (TypeScript, Vite) frontend.
 
 This project was initially created as a personal solution for managing my photos through a folder-based structure. It also served as an interesting experiment in AI-assisted programming, where AI tools handled a significant portion of the coding, allowing me to focus on product design, workflow, and final adjustments.
+
+![SimplePhotos](SimplePhotos.png)
 
 ## Key Features
 
