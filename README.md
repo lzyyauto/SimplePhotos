@@ -1,12 +1,12 @@
-# SimplePhotos Backend Service
-
-[中文文档](README_zh.md)
+# SimplePhotos Full-Stack Application
 
 ## Project Overview
 
-This project aims to develop a Python-based backend service for processing and browsing images and videos organized in a folder structure. It follows a front-end/back-end separated architecture, with the backend responsible for handling, storing, and providing data interfaces for multimedia files. This service is specifically designed for multimedia content organized by folder structure, allowing users to manage and browse through directory levels.
+This project is a full-stack web application designed for processing and browsing images and videos organized in a folder structure. It features a Python-based backend service built with FastAPI and a React frontend developed with TypeScript and Vite. The backend handles multimedia file processing, storage, and provides data interfaces, while the frontend offers a user-friendly interface for managing and browsing multimedia content organized by directory levels.
 
 ## Tech Stack
+
+### Backend
 
 - **Programming Language**: Python
 - **Web Framework**: FastAPI
@@ -15,6 +15,12 @@ This project aims to develop a Python-based backend service for processing and b
 - **Image Processing**: Pillow, pyheif
 - **Other Tools**: ExifRead
 
+### Frontend
+
+- **Library / Framework**: React
+- **Language**: TypeScript
+- **Build Tool**: Vite
+
 ## Supported Multimedia Formats
 
 - **Images**: `.jpg`, `.jpeg`, `.png`, `.gif`, `.webp`, `.heic`, `.heif`
@@ -22,14 +28,17 @@ This project aims to develop a Python-based backend service for processing and b
 
 ## Getting Started
 
-1. **Clone the Repository**
+Follow these steps to get the application up and running on your local machine.
+
+### Backend Setup
+
+1. **Navigate to the Backend Directory:**
 
    ```bash
-   git clone [your_repository_address]
-   cd [project_directory]
+   cd [project_directory]  # Replace with the actual project directory if necessary
    ```
 
-2. **Create and Activate a Virtual Environment (Recommended)**
+2. **Create and Activate a Virtual Environment (Recommended):**
 
    ```bash
    python -m venv venv
@@ -37,21 +46,48 @@ This project aims to develop a Python-based backend service for processing and b
    venv\Scripts\activate  # On Windows
    ```
 
-3. **Install Dependencies**
+3. **Install Backend Dependencies:**
 
    ```bash
    pip install -r requirements.txt
    ```
 
-4. **Run the Service**
+4. **Run the Backend Service:**
 
    ```bash
    uvicorn main:app --reload
    ```
 
-   The service will be running at `http://localhost:8000`.
+   The backend service will be running at `http://localhost:8000`.
 
-## API Endpoints
+### Frontend Setup
+
+1. **Navigate to the Frontend Directory:**
+
+   Since the README mentions a combined structure, ensure you are in the root of your project or a designated frontend subdirectory. If the frontend code is not within the backend directory, adjust the path accordingly.
+
+   ```bash
+   # Assuming your frontend is in a 'frontend' directory at the project root
+   cd frontend
+   ```
+
+2. **Install Frontend Dependencies:**
+
+   ```bash
+   npm install  # or yarn install or pnpm install
+   ```
+
+3. **Run the Frontend Development Server:**
+
+   ```bash
+   npm run dev   # or yarn dev or pnpm dev
+   ```
+
+   The frontend application will typically be running at `http://localhost:5173` (or a similar port indicated in the console output).
+
+## API Endpoints (Backend)
+
+The backend provides the following API endpoints:
 
 ### Folders
 
@@ -68,34 +104,6 @@ This project aims to develop a Python-based backend service for processing and b
 
 - **Trigger Full Scan**: `POST /api/scan`
 
-## Project Structure
-
-```
-├── PronjectInfo.md
-├── __init__.py
-├── app
-│   ├── api
-│   │   ├── routes.py       # API route definitions
-│   │   └── schemas.py      # Pydantic data models
-│   ├── config.py          # Project configuration
-│   ├── database
-│   │   ├── database.py    # Database connection and session management
-│   │   └── models.py      # SQLAlchemy database models
-│   ├── services
-│   │   ├── cache_service.py # Cache service
-│   │   ├── file_service.py  # File operation service
-│   │   ├── image_service.py # Image/video processing service
-│   │   └── init_service.py  # Initialization service
-│   └── utils
-│       ├── image_utils.py # Image processing utilities
-│       └── logger.py      # Logging
-├── logs
-│   └── app.log           # Application logs
-├── main.py               # Application entry point
-├── project_structure
-└── requirements.txt      # Dependency list
-```
-
 ## Future Extensions
 
 - User Authentication and Authorization
@@ -103,3 +111,7 @@ This project aims to develop a Python-based backend service for processing and b
 - Advanced Search and Filtering
 - Image/Video Editing Features
 - Online Video Playback
+
+## Localization
+
+A Chinese version of this README is available: [中文文档](README_zh.md)
