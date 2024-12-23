@@ -82,22 +82,34 @@ graph LR
 
 ### 表结构
 
+- **folders**
+    - `id` (INTEGER, PRIMARY KEY)
+    - `folder_path` (TEXT, UNIQUE)  # 相对路径
+    - `name` (TEXT)  # 文件夹名称
+    - `parent_id` (INTEGER, FOREIGN KEY)  # 父文件夹ID，根目录为0
+    - `created_at` (TIMESTAMP)
+    - `updated_at` (TIMESTAMP)
+
 - **images**
-    
     - `id` (INTEGER, PRIMARY KEY)
     - `file_path` (TEXT, UNIQUE)
+    - `folder_id` (INTEGER, FOREIGN KEY)  # 所属文件夹ID
+    - `name` (TEXT)  # 文件名
     - `thumbnail_path` (TEXT)
     - `exif_data` (JSON)
     - `is_heic` (BOOLEAN)
     - `converted_path` (TEXT, 可选)
+    - `image_type` (TEXT)  # original, converted, thumbnail
+    - `parent_id` (INTEGER, FOREIGN KEY)  # 原图ID，用于关联转换图和缩略图
+    - `is_thumbnail` (BOOLEAN)  # 是否作为缩略图使用
     - `created_at` (TIMESTAMP)
     - `updated_at` (TIMESTAMP)
-- **folders**
-    
-    - `id` (INTEGER, PRIMARY KEY)
-    - `folder_path` (TEXT, UNIQUE)
-    - `created_at` (TIMESTAMP)
-    - `updated_at` (TIMESTAMP)
+
+### 文件夹结构
+
+- 根目录 (id = 0) 代表图片库的入口点
+- 所有文件夹通过 parent_id 形成树状结构
+- API 默认从根目录开始查询
 
 ## API 设计
 

@@ -15,7 +15,11 @@ class ImageService:
         self.db = db
         self.processor = ImageProcessor()
 
-    async def process_image(self, file_path: str) -> Optional[Image]:
+    async def process_image(self,
+                            file_path: str,
+                            folder_id: int,
+                            image_type: str = 'original',
+                            parent_id: int = None) -> Optional[Image]:
         """处理单个图片文件"""
         try:
             logger.info(f"开始处理图片: {file_path}")
@@ -50,7 +54,10 @@ class ImageService:
                           thumbnail_path=thumb_path,
                           exif_data=exif_data,
                           is_heic=is_heic,
-                          converted_path=converted_path)
+                          converted_path=converted_path,
+                          folder_id=folder_id,
+                          image_type=image_type,
+                          parent_id=parent_id)
 
             self.db.add(image)
             self.db.commit()
