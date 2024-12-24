@@ -29,7 +29,7 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ${PWD}/data:/app/data
+      - /path/to/your/data:/app/data
     environment:
       - NODE_ENV=production
       - LANG=zh_CN.UTF-8
