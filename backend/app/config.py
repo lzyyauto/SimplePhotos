@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     API_THUMBNAILS_PATH: str = "/data/thumbnails"
     API_CONVERTED_PATH: str = "/data/converted"
 
+    # 扫描处理配置 - 使用简单的环境变量覆盖
+    SCAN_WORKERS: int = int(os.getenv('SCAN_WORKERS', os.cpu_count() or 4))
+    SCAN_CHUNK_SIZE: int = int(os.getenv('SCAN_CHUNK_SIZE', 100))
+
     def setup_directories(self) -> None:
         """确保所有必要的目录存在，不存在则创建"""
         for path in [

@@ -10,6 +10,13 @@ services:
       - LANG=zh_CN.UTF-8
       - LC_ALL=zh_CN.UTF-8
       - DATA_ROOT=/app/data
+      - SCAN_WORKERS=4      # 线程数
+      - SCAN_CHUNK_SIZE=100 # 每个线程一次处理的文件数
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+          cpus: '4'
 
 volumes:
   data:
