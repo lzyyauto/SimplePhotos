@@ -34,6 +34,7 @@ services:
       - NODE_ENV=production
       - LANG=zh_CN.UTF-8
       - LC_ALL=zh_CN.UTF-8
+      - DATA_ROOT=/app/data
 
 volumes:
   data:
