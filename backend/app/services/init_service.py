@@ -2,6 +2,7 @@ import asyncio
 import concurrent.futures
 import os
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from queue import Empty, Queue
@@ -33,7 +34,7 @@ class InitializationService:
     async def initialize_database(self) -> bool:
         """初始化数据库"""
         try:
-            # 检查表中是否有数据
+            # 检查表中是否有数���
             with self.Session() as session:
                 folder_count = session.query(Folder).count()
                 if folder_count > 0:
@@ -125,91 +126,108 @@ class InitializationService:
                         folder = self._get_or_create_folder(full_path, session)
                         folders_map[rel_path] = folder.id
 
-            # 3. 收集文件
+            # 收集所有文件并预先分片
+            all_files = []
             for root, _, files in os.walk(settings.IMAGES_DIR):
                 rel_path = os.path.relpath(root, settings.IMAGES_DIR)
-                folder_id = folders_map.get(rel_path, root_id)  # 使用根目录ID作为默认值
+                folder_id = folders_map.get(rel_path, folders_map.get('.'))
                 for file in files:
                     if any(file.lower().endswith(ext)
                            for ext in settings.SUPPORTED_FORMATS):
-                        self.file_queue.put((os.path.join(root,
-                                                          file), folder_id))
-                        self.total_files += 1
+                        all_files.append((os.path.join(root, file), folder_id))
 
+            self.total_files = len(all_files)
             logger.info(f"找到 {self.total_files} 个文件待处理")
 
-            # 4. 工作线程函数
-            def worker():
+            # 确保分片大小符合配置
+            chunk_size = self.chunk_size
+            chunks = [
+                all_files[i:i + chunk_size]
+                for i in range(0, len(all_files), chunk_size)
+            ]
+            logger.info(f"分成 {len(chunks)} 个分片")
+
+            def process_chunk(chunk_id: int,
+                              files: List[Tuple[str, int]]) -> Tuple[int, int]:
                 thread_name = threading.current_thread().name
-                local_success = 0
-                local_failed = 0
-                batch_count = 0
+                success = 0
+                failed = 0
+                chunk_size = len(files)
+
+                logger.info(
+                    f"[{thread_name}] 开始处理分片 {chunk_id+1}/{len(chunks)}, 大小: {chunk_size}"
+                )
 
                 with self.Session() as session:
                     image_service = ImageService(session)
-                    while True:
-                        # 获取一批文件
-                        batch = []
-                        for _ in range(self.chunk_size):
+                    batch = []
+
+                    for idx, (file_path, folder_id) in enumerate(files, 1):
+                        try:
+                            if asyncio.run(
+                                    image_service.process_image(
+                                        file_path, folder_id)):
+                                success += 1
+                                batch.append(True)
+                            else:
+                                failed += 1
+                                batch.append(False)
+                                logger.warning(
+                                    f"[{thread_name}] 处理��败: {file_path}")
+                        except Exception as e:
+                            failed += 1
+                            logger.error(
+                                f"[{thread_name}] 处理错误: {file_path}, 错误: {str(e)}"
+                            )
+                            continue
+
+                        if len(batch) >= self.chunk_size:
                             try:
-                                batch.append(self.file_queue.get_nowait())
-                            except Empty:
-                                break
-
-                        if not batch:
-                            break
-
-                        batch_count += 1
-                        logger.info(
-                            f"[{thread_name}] 开始处理第 {batch_count} 个分片，包含 {len(batch)} 个文件"
-                        )
-
-                        # 处理这批文件
-                        for file_path, folder_id in batch:
-                            try:
-                                if asyncio.run(
-                                        image_service.process_image(
-                                            file_path, folder_id)):
-                                    local_success += 1
-                                else:
-                                    local_failed += 1
-                                    logger.warning(
-                                        f"[{thread_name}] 处理失败: {file_path}")
+                                session.commit()
+                                batch = []
                             except Exception as e:
-                                local_failed += 1
                                 logger.error(
-                                    f"[{thread_name}] 处理错误: {file_path}, 错误: {str(e)}"
+                                    f"[{thread_name}] 提交失败，继续处理: {str(e)}")
+
+                        # 进度日志
+                        chunk_progress = (idx * 100) // chunk_size
+                        if chunk_progress in [0, 50, 100]:
+                            logger.info(
+                                f"[{thread_name}] 分片 {chunk_id+1} 进度: {chunk_progress}% - "
+                                f"成功: {success}, 失败: {failed}")
+
+                        with self._lock:
+                            self.processed_count += 1
+                            if self.processed_count in [
+                                    1, self.total_files // 2, self.total_files
+                            ]:
+                                total_progress = (self.processed_count *
+                                                  100) // self.total_files
+                                logger.info(
+                                    f"总进度: {total_progress}% ({self.processed_count}/{self.total_files}) - "
+                                    f"成功: {self.processed_count}, 失败: {self.failed_count}"
                                 )
 
-                            # 更新进度
-                            with self._lock:
-                                self.processed_count += 1
-                                progress = (self.processed_count *
-                                            100) / self.total_files
-                                if self.processed_count % 100 == 0:
-                                    logger.info(
-                                        f"[{thread_name}] 分片 {batch_count} - "
-                                        f"总进度: {progress:.1f}% ({self.processed_count}/{self.total_files}) - "
-                                        f"成功: {local_success}, 失败: {local_failed}"
-                                    )
+                    # 提交剩余的文件
+                    if batch:
+                        try:
+                            session.commit()
+                        except Exception as e:
+                            logger.error(f"[{thread_name}] 最终提交失败: {str(e)}")
 
-                        # 每批次提交一次
-                        session.commit()
-                        logger.info(f"[{thread_name}] 完成第 {batch_count} 个分片处理")
+                return success, failed
 
-                return local_success, local_failed
-
-            # 5. 启动工作线程
+            # 使用线程池处理分片
             with ThreadPoolExecutor(
                     max_workers=self.max_workers,
                     thread_name_prefix="ScanWorker") as executor:
                 futures = [
-                    executor.submit(worker) for _ in range(self.max_workers)
+                    executor.submit(process_chunk, i, chunk)
+                    for i, chunk in enumerate(chunks)
                 ]
+
                 total_success = 0
                 total_failed = 0
-
-                # 等待所有线程完成
                 for future in concurrent.futures.as_completed(futures):
                     success, failed = future.result()
                     total_success += success
