@@ -7,6 +7,13 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libxext6 \
     libgl1 \
+    curl \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Node.js
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 和必要的构建工具，添加中文支持
@@ -50,7 +57,7 @@ COPY frontend ./frontend
 
 # 创建数据目录
 RUN mkdir -p data/images data/cache/thumbnails data/cache/converted && \
-    chown -R node:node /app
+    chown -R 1000:1000 /app
 
 # 创建启动脚本
 RUN echo '#!/bin/bash\nuvicorn main:app --host 0.0.0.0 --port 8000 &\ncd frontend && npm run dev -- --host 0.0.0.0 &\nwait' > /app/start.sh && \

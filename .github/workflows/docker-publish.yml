@@ -2,8 +2,7 @@ name: Docker Build and Push
 
 on:
   push:
-    branches: [ "main" ]  # 当 main 分支有提交时触发
-    tags: [ 'v*' ]       # 当推送版本标签时触发
+    tags: [ 'v*' ]
   pull_request:
     branches: [ "main" ]
 

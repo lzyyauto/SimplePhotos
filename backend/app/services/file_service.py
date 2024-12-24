@@ -110,18 +110,11 @@ class FileService:
         logger.info(f"开始监控目录: {path}")
         event_handler = FileWatcher(self.db, self.image_service)
 
-        # 尝试使用默认 Observer，如果失败则使用 PollingObserver
-        try:
-            self.observer = Observer()
-            self.observer.schedule(event_handler, path, recursive=True)
-            self.observer.start()
-            logger.info("使用系统原生文件监控服务")
-        except Exception as e:
-            logger.warning(f"系统原生监控启动失败: {e}，切换到轮询模式")
-            self.observer = PollingObserver(timeout=2)
-            self.observer.schedule(event_handler, path, recursive=True)
-            self.observer.start()
-            logger.info("使用轮询模式监控服务")
+        # 在容器环境中直接使用 PollingObserver
+        self.observer = PollingObserver(timeout=2)
+        self.observer.schedule(event_handler, path, recursive=True)
+        self.observer.start()
+        logger.info("使用轮询模式监控服务")
 
     def stop_watching(self):
         """停止文件监控"""
