@@ -8,6 +8,8 @@ import { GlobalLoading } from '../Loading/GlobalLoading'
 export const SettingsMenu = () => {
   const { title, desktopColumns, mobileColumns, setTitle, setDesktopColumns, setMobileColumns } = useSettingsStore()
   const [isLoading, setIsLoading] = useState(false)
+  const MIN_COLUMNS = 1
+  const MAX_COLUMNS = 12
 
   const handleRefreshLibrary = async () => {
     if (isLoading) return;
@@ -56,6 +58,56 @@ export const SettingsMenu = () => {
     }
   }
 
+  // 处理数字调整
+  const handleAdjustNumber = (
+    currentValue: number,
+    setter: (value: number) => void,
+    increment: boolean
+  ) => {
+    const newValue = increment ? currentValue + 1 : currentValue - 1
+    if (newValue >= MIN_COLUMNS && newValue <= MAX_COLUMNS) {
+      setter(newValue)
+    }
+  }
+
+  // 数字输入组件
+  const NumberInput = ({ 
+    value, 
+    setter, 
+    label 
+  }: { 
+    value: number, 
+    setter: (value: number) => void, 
+    label: string 
+  }) => (
+    <div className="mb-4">
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+      <div className="flex items-center mt-1 relative">
+        <button
+          onClick={() => handleAdjustNumber(value, setter, false)}
+          disabled={value <= MIN_COLUMNS}
+          className={`px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-l
+            ${value <= MIN_COLUMNS ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title={value <= MIN_COLUMNS ? "已达到最小值" : undefined}
+        >
+          -
+        </button>
+        <div className="w-full text-center py-2 bg-white dark:bg-gray-700 border-x border-gray-300 dark:border-gray-600">
+          {value}
+        </div>
+        <button
+          onClick={() => handleAdjustNumber(value, setter, true)}
+          disabled={value >= MAX_COLUMNS}
+          className={`px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-r
+            ${value >= MAX_COLUMNS ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          title={value >= MAX_COLUMNS ? "已达到最大值" : undefined}
+        >
+          +
+        </button>
+      </div>
+    </div>
+  )
+
   return (
     <Menu>
       {({ open }) => (
@@ -85,25 +137,17 @@ export const SettingsMenu = () => {
                 />
               </div>
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">桌面端列数</label>
-                <input
-                  type="number"
-                  value={desktopColumns}
-                  onChange={(e) => setDesktopColumns(Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600"
-                />
-              </div>
+              <NumberInput 
+                value={desktopColumns} 
+                setter={setDesktopColumns} 
+                label="桌面端列数"
+              />
 
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">移动端列数</label>
-                <input
-                  type="number"
-                  value={mobileColumns}
-                  onChange={(e) => setMobileColumns(Number(e.target.value))}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600"
-                />
-              </div>
+              <NumberInput 
+                value={mobileColumns} 
+                setter={setMobileColumns} 
+                label="移动端列数"
+              />
 
               <Menu.Item>
                 {({ active }) => (

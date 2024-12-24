@@ -5,11 +5,13 @@ from app.api.routes import router
 from app.config import settings
 from app.database import models
 from app.database.database import engine, get_db
+from app.services.file_service import FileService
 from app.services.init_service import InitializationService
 from app.utils.logger import logger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from sqlalchemy.orm import Session
 
 # 创建数据库表
 logger.info("正在创建数据库表...")
@@ -21,23 +23,35 @@ logger.info("数据库表创建完成")
 async def lifespan(app: FastAPI):
     print("lifespan start")
     """应用生命周期事件处理"""
+    file_service = None  # 在外部定义，以便finally中可以访问
     try:
         logger.info("开始应用初始化...")
         db = next(get_db())
-        init_service = InitializationService(db, engine)
-        result = await init_service.initialize_database()
-        if result:
+
+        # 初始化服务
+        init_service = InitializationService(db)
+        if await init_service.initialize_database():
             logger.info("数据库初始化完成")
+
+            # 启动文件监控
+            file_service = FileService(db)
+            file_service.start_watching(str(settings.IMAGES_DIR))
+            logger.info("文件监控服务已启动")
         else:
-            logger.info("数据库已存在，跳过初始化")
-        logger.info("应用初始化完成")
+            raise RuntimeError("数据库初始化失败")
+
         yield
+
     except Exception as e:
         print(f"初始化错误: {e}")
         logger.error(f"启动初始化失败: {str(e)}")
         raise e
     finally:
         print("lifespan finally")
+        # 停止文件监控
+        if file_service:
+            file_service.stop_watching()
+            logger.info("文件监控服务已停止")
 
 
 # 配置 uvicorn 访问日志
@@ -46,7 +60,7 @@ logging_config = {
     "disable_existing_loggers": False,
     "formatters": {
         "default": {
-            "format": "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            "format": "%(asctime)s - %(levelname)s - %(message)s",
             "datefmt": "%Y-%m-%d %H:%M:%S",
         },
     },
@@ -60,13 +74,13 @@ logging_config = {
     "loggers": {
         "uvicorn.access": {
             "handlers": ["default"],
-            "level": "WARNING",  # 将访问日志级别改为 WARNING
+            "level": "WARNING",
             "propagate": False,
         },
     },
 }
 
-# 先定义 lifespan 函数，再创建 FastAPI 实例
+# 先定义 lifespan 函数，再创��� FastAPI 实例
 app = FastAPI(
     title=settings.APP_NAME,
     debug=settings.DEBUG,

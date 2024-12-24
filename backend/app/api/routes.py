@@ -1,10 +1,6 @@
 from math import ceil
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
-
 from app.api import schemas
 from app.config import settings
 from app.database.database import engine, get_db
@@ -13,6 +9,9 @@ from app.services.file_service import FileService
 from app.services.image_service import ImageService
 from app.services.init_service import InitializationService
 from app.utils.logger import logger
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -90,7 +89,7 @@ async def get_image(image_id: int, db: Session = Depends(get_db)):
 async def trigger_full_scan(db: Session = Depends(get_db)):
     """手动触发全盘扫描"""
     try:
-        init_service = InitializationService(db, engine)
+        init_service = InitializationService(db)
         folders_count, images_count = await init_service.full_scan()
         return {
             "status": "success",
@@ -126,12 +125,12 @@ async def get_image_full(image_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/folders/{parent_id}/subfolders")
-async def get_subfolders(parent_id: int | None = None,
+async def get_subfolders(parent_id: int = 1,
                          page: int = Query(default=1, ge=1),
                          db: Session = Depends(get_db)):
     """获取指定文件夹下的所有子文件夹（分页）"""
     # 构建基础查询
-    if parent_id == 0:  # 约定 0 为根目录
+    if parent_id == 0:  # 约定 0 为根��录
         base_query = db.query(Folder).filter(Folder.parent_id.is_(None))
     else:
         base_query = db.query(Folder).filter(Folder.parent_id == parent_id)

@@ -1,5 +1,4 @@
 import logging
-import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -10,7 +9,7 @@ def setup_logger():
     """配置日志系统"""
 
     # 创建日志目录
-    log_dir = settings.BASE_DIR / "logs"
+    log_dir = settings.DATA_DIR / "logs"
     log_dir.mkdir(exist_ok=True)
     log_file = log_dir / "app.log"
 
@@ -20,7 +19,7 @@ def setup_logger():
 
     # 日志格式
     formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        '%(asctime)s - %(levelname)s - %(message)s',  # 简化格式，移除了 name
         datefmt='%Y-%m-%d %H:%M:%S')
 
     # 文件处理器
@@ -33,14 +32,13 @@ def setup_logger():
     file_handler.setLevel(logging.INFO)
 
     # 控制台处理器
-    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
     console_handler.setLevel(logging.INFO)
 
     # 创建应用日志器
     logger = logging.getLogger('SimplePhotos')
     logger.setLevel(logging.INFO)
-
     # 清除可能存在的旧处理器
     logger.handlers.clear()
 
