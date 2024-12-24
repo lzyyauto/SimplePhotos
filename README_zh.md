@@ -35,6 +35,8 @@ services:
       - LANG=zh_CN.UTF-8
       - LC_ALL=zh_CN.UTF-8
       - DATA_ROOT=/app/data
+      - SCAN_WORKERS=4
+      - SCAN_CHUNK_SIZE=20
 
 volumes:
   data:

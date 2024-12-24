@@ -10,8 +10,8 @@ services:
       - LANG=zh_CN.UTF-8
       - LC_ALL=zh_CN.UTF-8
       - DATA_ROOT=/app/data
-      - SCAN_WORKERS=4      # 线程数
-      - SCAN_CHUNK_SIZE=100 # 每个线程一次处理的文件数
+      - SCAN_WORKERS=4       # 最大线程数，建议设置为 CPU 核心数的 2-4 倍
+      - SCAN_CHUNK_SIZE=20    # 每个分片的文件数，可以根据文件大小调整
     deploy:
       resources:
         limits:

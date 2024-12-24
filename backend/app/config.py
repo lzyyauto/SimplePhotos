@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     # 基础路径配置 - 通过环境变量或默认值设置
     BASE_DIR: Path = Path(__file__).parent.parent.parent
     DATA_ROOT: Path = Path(os.getenv('DATA_ROOT',
-                                     BASE_DIR / 'data'))  # 默认为项目根目录下的 data
+                                     str(BASE_DIR / 'data')))  # 转换为字符串
 
     # 数据目录配置
     DATA_DIR: Path = DATA_ROOT
@@ -46,7 +46,12 @@ class Settings(BaseSettings):
 
     # 扫描处理配置 - 使用简单的环境变量覆盖
     SCAN_WORKERS: int = int(os.getenv('SCAN_WORKERS', os.cpu_count() or 4))
-    SCAN_CHUNK_SIZE: int = int(os.getenv('SCAN_CHUNK_SIZE', 100))
+    SCAN_CHUNK_SIZE: int = int(os.getenv('SCAN_CHUNK_SIZE', 10))
+
+    def __init__(self):
+        super().__init__()
+        print(f"BASE_DIR: {self.BASE_DIR}")
+        print(f"DATA_ROOT: {self.DATA_ROOT}")
 
     def setup_directories(self) -> None:
         """确保所有必要的目录存在，不存在则创建"""
