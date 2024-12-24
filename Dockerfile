@@ -1,5 +1,13 @@
 # 基础镜像
-FROM node:20-slim
+FROM python:3.11-slim
+
+# 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    libsm6 \
+    libxext6 \
+    libgl1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 和必要的构建工具，添加中文支持
 RUN apt-get update && apt-get install -y \
