@@ -1,4 +1,7 @@
 import contextlib
+import signal
+import sys
+from typing import Optional
 
 import uvicorn
 from app.api.routes import router
@@ -11,7 +14,23 @@ from app.utils.logger import logger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from sqlalchemy.orm import Session
+
+# 全局服务实例
+file_service: Optional[FileService] = None
+
+
+def shutdown(signal_type):
+    """处理关闭信号"""
+    logger.info(f"收到 {signal_type} 信号，开始清理...")
+    if file_service:
+        file_service.stop_watching()
+        logger.info("文件监控服务已停止")
+    sys.exit(0)
+
+
+# 注册信号处理
+signal.signal(signal.SIGINT, lambda s, f: shutdown('SIGINT'))
+signal.signal(signal.SIGTERM, lambda s, f: shutdown('SIGTERM'))
 
 # 创建数据库表
 logger.info("正在创建数据库表...")
@@ -21,9 +40,9 @@ logger.info("数据库表创建完成")
 
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("lifespan start")
-    """应用生命周期事件处理"""
-    file_service = None  # 在外部定义，以便finally中可以访问
+    """应用生命周期管理"""
+    global file_service
+
     try:
         logger.info("开始应用初始化...")
         db = next(get_db())
@@ -34,21 +53,21 @@ async def lifespan(app: FastAPI):
             logger.info("数据库初始化完成")
 
             # 启动文件监控
-            file_service = FileService(db)
-            file_service.start_watching(str(settings.IMAGES_DIR))
-            logger.info("文件监控服务已启动")
+            # file_service = FileService(db)
+            # file_service.start_watching(str(settings.IMAGES_DIR))
+            # logger.info("文件监控服务已启动")
         else:
             raise RuntimeError("数据库初始化失败")
 
         yield
 
     except Exception as e:
-        print(f"初始化错误: {e}")
         logger.error(f"启动初始化失败: {str(e)}")
+        if file_service:
+            file_service.stop_watching()
         raise e
     finally:
-        print("lifespan finally")
-        # 停止文件监控
+        logger.info("应用正在关闭...")
         if file_service:
             file_service.stop_watching()
             logger.info("文件监控服务已停止")
@@ -80,12 +99,8 @@ logging_config = {
     },
 }
 
-# 先定义 lifespan 函数，再创��� FastAPI 实例
-app = FastAPI(
-    title=settings.APP_NAME,
-    debug=settings.DEBUG,
-    lifespan=lifespan  # 现在 lifespan 函数已经定义，可以直接使用
-)
+# 创建 FastAPI 实例
+app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG, lifespan=lifespan)
 
 # 配置CORS
 app.add_middleware(
@@ -96,7 +111,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 挂载所有静态文件目录
+# 挂载静态文件目录
 app.mount("/data/images",
           StaticFiles(directory=str(settings.IMAGES_DIR)),
           name="images")

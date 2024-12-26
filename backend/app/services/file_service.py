@@ -16,10 +16,10 @@ from watchdog.observers.polling import PollingObserver
 class FileWatcher(FileSystemEventHandler):
 
     def __init__(self, db: Session, image_service: ImageService):
-        self.db = db
-        self.image_service = image_service
-        self.loop = asyncio.get_event_loop()
-        logger.info("初始化文件监控服务")
+        # self.db = db
+        # self.image_service = image_service
+        # self.loop = asyncio.get_event_loop()
+        logger.info("初始化文件监控服务2")
 
     def on_created(self, event):
         if not event.is_directory and self._is_valid_image(event.src_path):
@@ -110,8 +110,9 @@ class FileService:
         logger.info(f"开始监控目录: {path}")
         event_handler = FileWatcher(self.db, self.image_service)
 
-        # 在容器环境中直接使用 PollingObserver
-        self.observer = PollingObserver(timeout=2)
+        # 修改监控服务的配置
+        self.observer = PollingObserver(timeout=1)  # 减少超时时间
+        self.observer.daemon = True  # 设置为守护线程
         self.observer.schedule(event_handler, path, recursive=True)
         self.observer.start()
         logger.info("使用轮询模式监控服务")
@@ -119,10 +120,16 @@ class FileService:
     def stop_watching(self):
         """停止文件监控"""
         if self.observer:
-            self.observer.stop()
-            self.observer.join()
-            self.observer = None
-            logger.info("文件监控服务已停止")
+            try:
+                self.observer.stop()
+                # 添加超时机制
+                self.observer.join(timeout=2)
+                if self.observer.is_alive():
+                    logger.warning("文件监控服务未能正常停止")
+                self.observer = None
+                logger.info("文件监控服务已停止")
+            except Exception as e:
+                logger.error(f"停止文件监控服务失败: {str(e)}")
 
     def get_folder_structure(self, base_path: str) -> List[dict]:
         """获取文件夹结构"""
