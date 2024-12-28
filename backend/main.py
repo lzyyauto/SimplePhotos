@@ -7,7 +7,7 @@ import uvicorn
 from app.api.routes import router
 from app.config import settings
 from app.database import models
-from app.database.database import engine, get_db
+from app.database.database import SessionLocal, engine, get_db
 from app.services.file_service import FileService
 from app.services.init_service import InitializationService
 from app.utils.logger import logger
@@ -41,36 +41,29 @@ logger.info("数据库表创建完成")
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
-    global file_service
-
     try:
-        logger.info("开始应用初始化...")
-        db = next(get_db())
+        # 创建数据库会话
+        db = SessionLocal()
 
-        # 初始化服务
-        init_service = InitializationService(db)
-        if await init_service.initialize_database():
-            logger.info("数据库初始化完成")
+        try:
+            # 初始化服务
+            init_service = InitializationService(db)
+            if not await init_service.initialize_database():
+                logger.error("数据库初始化失败")
+                raise RuntimeError("数据库初始化失败")
 
-            # 启动文件监控
-            # file_service = FileService(db)
-            # file_service.start_watching(str(settings.IMAGES_DIR))
-            # logger.info("文件监控服务已启动")
-        else:
-            raise RuntimeError("数据库初始化失败")
+        except Exception as e:
+            logger.error(f"初始化服务失败: {str(e)}")
+            raise
+
+        finally:
+            db.close()
 
         yield
 
     except Exception as e:
-        logger.error(f"启动初始化失败: {str(e)}")
-        if file_service:
-            file_service.stop_watching()
+        logger.error(f"应用启动失败: {str(e)}")
         raise e
-    finally:
-        logger.info("应用正在关闭...")
-        if file_service:
-            file_service.stop_watching()
-            logger.info("文件监控服务已停止")
 
 
 # 配置 uvicorn 访问日志

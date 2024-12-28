@@ -31,7 +31,7 @@ async def get_folder_images(folder_id: int = 1,
     # 使用 join 一次性获取原图和对应的缩略图
     images_query = (
         db.query(Image)  # 查询完整的 Image 对象
-        .filter(Image.folder_id == folder_id, Image.image_type == 'original'))
+        .filter(Image.folder_id == folder_id))
 
     # 获取总数和分页
     total_images = images_query.count()
