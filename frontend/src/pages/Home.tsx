@@ -3,13 +3,11 @@ import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
 import { Folder, Image } from '@/types';
-import { FolderCard } from '@/components/Gallery/FolderCard';
+import { FolderGrid } from '@/components/Gallery/FolderGrid';
 import { ImageGrid } from '@/components/Gallery/ImageGrid';
 import { ImageViewer } from '@/components/Gallery/ImageViewer';
 import { Spinner } from '@/components/Loading/Spinner';
-import { Pagination } from '@/components/UI/Pagination';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { FolderGrid } from '@/components/Gallery/FolderGrid';
 import { useInView } from 'react-intersection-observer';
 
 export const Home = () => {
@@ -17,65 +15,81 @@ export const Home = () => {
   const [selectedImage, setSelectedImage] = useState<Image | null>(null);
   const { title } = useSettingsStore();
   
-  // 文件夹底部观察器
-  const { ref: foldersEndRef, inView: foldersEndVisible } = useInView({
-    threshold: 0,
-    rootMargin: '300px',
-    onChange: (inView) => {
-      console.log('Home folders observer:', { 
-        inView, 
-        hasMoreFolders, 
-        isFetchingFolders,
-        currentItems: allFolders.length,
-        totalItems: foldersData?.pages[0]?.total
-      });
-    }
-  });
-
-  // 无限加载文件夹
+  // 文件夹查询
   const {
     data: foldersData,
     fetchNextPage: fetchNextFolders,
     hasNextPage: hasMoreFolders,
-    isFetchingNextPage: isFetchingFolders
+    isFetchingNextPage: isFetchingFolders,
+    isLoading: isFoldersLoading,
   } = useInfiniteQuery({
-    queryKey: ['home-folders'],
+    queryKey: ['folders', 1],
     queryFn: async ({ pageParam = 1 }) => {
-      console.log('Fetching home folders page:', pageParam);
       const data = await api.getFolders(1, pageParam);
-      console.log('Home folders response:', data);
       return data;
     },
-    getNextPageParam: (lastPage) => {
-      const nextPage = lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined;
-      console.log('Next home folders page:', nextPage);
-      return nextPage;
-    },
+    getNextPageParam: (lastPage) => 
+      lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined,
     initialPageParam: 1,
   });
 
-  // 监听文件夹底部
-  useEffect(() => {
-    console.log('Home folders effect triggered:', {
-      foldersEndVisible,
-      hasMoreFolders,
-      isFetchingFolders,
-      currentPage: foldersData?.pages?.length
-    });
+  // 图片查询
+  const {
+    data: imagesData,
+    fetchNextPage: fetchNextImages,
+    hasNextPage: hasMoreImages,
+    isFetchingNextPage: isFetchingImages,
+    isLoading: isImagesLoading,
+  } = useInfiniteQuery({
+    queryKey: ['folder-images', 1],
+    queryFn: async ({ pageParam = 1 }) => {
+      const data = await api.getFolderImages(1, pageParam);
+      return data;
+    },
+    getNextPageParam: (lastPage) => 
+      lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined,
+    initialPageParam: 1,
+  });
 
+  // 监听滚动加载
+  const { ref: foldersEndRef, inView: foldersEndVisible } = useInView({
+    threshold: 0,
+    rootMargin: '300px'
+  });
+
+  const { ref: imagesEndRef, inView: imagesEndVisible } = useInView({
+    threshold: 0,
+    rootMargin: '300px'
+  });
+
+  // 处理滚动加载
+  useEffect(() => {
     if (foldersEndVisible && hasMoreFolders && !isFetchingFolders) {
-      console.log('Loading more home folders...');
       fetchNextFolders();
     }
   }, [foldersEndVisible, hasMoreFolders, isFetchingFolders]);
 
-  // 合并所有文件夹��据
+  useEffect(() => {
+    if (imagesEndVisible && hasMoreImages && !isFetchingImages) {
+      fetchNextImages();
+    }
+  }, [imagesEndVisible, hasMoreImages, isFetchingImages]);
+
+  // 合并数据
   const allFolders = foldersData?.pages?.flatMap(page => page?.items || []) ?? [];
+  const allImages = imagesData?.pages?.flatMap(page => page?.items || []) ?? [];
 
   return (
     <div className="h-[calc(100vh-4rem)] overflow-y-auto hide-scrollbar">
       <div className="p-4">
         <h1 className="text-2xl font-bold mb-6">{title}</h1>
+
+        {/* 加载状态 */}
+        {(isFoldersLoading || isImagesLoading) && (
+          <div className="flex justify-center">
+            <Spinner />
+          </div>
+        )}
         
         {/* 文件夹网格 */}
         {allFolders.length > 0 && (
@@ -85,32 +99,31 @@ export const Home = () => {
               folders={allFolders}
               onFolderClick={(folder) => navigate(`/folder/${folder.id}`)}
             />
-            <div 
-              ref={foldersEndRef}
-              className="h-20 flex items-center justify-center mt-4 bg-gray-100/20"
-            >
-              {isFetchingFolders ? (
-                <div className="text-center">
-                  <Spinner size="sm" />
-                  <div className="mt-2 text-sm text-gray-500">加载中...</div>
-                </div>
-              ) : hasMoreFolders ? (
-                <span className="text-sm text-gray-500">
-                  向下滚动加载更多 (已加载 {allFolders.length} 个)
-                </span>
-              ) : (
-                <span className="text-sm text-gray-500">没有更多文件夹了</span>
-              )}
+            {/* 文件夹加载更多 */}
+            <div ref={foldersEndRef} className="h-20 flex items-center justify-center">
+              {isFetchingFolders && <Spinner size="sm" />}
             </div>
           </div>
         )}
 
+        {/* 图片网格 */}
+        <div className="mb-8">
+          <h2 className="text-xl font-semibold mb-4">图片 ({allImages.length})</h2>
+          <ImageGrid
+            images={allImages}
+            onImageClick={setSelectedImage}
+          />
+          <div ref={imagesEndRef} className="h-20 flex items-center justify-center">
+            {isFetchingImages && <Spinner size="sm" />}
+          </div>
+        </div>
+
         {/* 图片查看器 */}
         <ImageViewer
           image={selectedImage}
-          images={[]}
+          images={allImages}
           onClose={() => setSelectedImage(null)}
-          onNavigate={() => {}}
+          onNavigate={(image) => setSelectedImage(image)}
         />
       </div>
     </div>

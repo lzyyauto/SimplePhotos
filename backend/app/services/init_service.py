@@ -5,7 +5,12 @@ from typing import Any, Dict, List, Tuple
 
 from app.config import settings
 from app.database.database import engine  # 确保导入 engine
-from app.models import Base, FileInfo, Folder, FolderInfo  # 从 app.models 导入
+from app.models import (
+    Base,
+    FailedImage,
+    FileInfo,
+    Folder,  # 从 app.models 导入
+    FolderInfo)
 from app.services.file_service import FileService
 from app.services.image_service import ImageService
 from app.utils.logger import logger
@@ -85,18 +90,19 @@ class InitializationService:
             # 先创建根目录
             with self.Session() as session:
                 root = session.query(Folder).filter(
-                    Folder.folder_path == settings.IMAGES_DIR).first()
+                    Folder.folder_path == ".").first()
                 if not root:
                     root_info = FolderInfo(full_path=settings.IMAGES_DIR,
                                            rel_path=".",
                                            name="root",
-                                           parent_path=None)
+                                           parent_path=0)
                     root = self.file_service.save_folder(root_info, session)
                     session.commit()
                     logger.info("创建根目录成功")
 
-                # 保存根目录ID到映射表
-                self.folders_map[settings.IMAGES_DIR] = root.id
+                # 保存根目录ID到映射表 - 同时保存绝对路径和相对路径
+                self.folders_map["."] = root.id  # 使用相对路径 "."
+                self.folders_map[str(settings.IMAGES_DIR)] = root.id  # 使用绝对路径
 
                 # 处理其他文件夹
                 all_folders, _ = self.file_service.collect_paths()
@@ -104,12 +110,14 @@ class InitializationService:
                     folder_info = self.file_service.get_folder_info(
                         folder_path)
                     folder = self.file_service.save_folder(
-                        folder_info, session, root.id)
+                        folder_info, session)
                     if folder:
-                        self.folders_map[folder_info.full_path] = folder.id
+                        # 使用绝对路径作为key
+                        self.folders_map[os.path.abspath(
+                            folder_path)] = folder.id
 
                 session.commit()
-                logger.info("文件夹处理完成")
+                logger.info(f"文件夹处理完成，映射表: {self.folders_map}")
 
             return True
 
@@ -163,7 +171,13 @@ class InitializationService:
                         folder_id = self.folders_map.get(abs_folder_path)
 
                     if not folder_id:
-                        logger.warning(f"找不到文件夹ID: {abs_folder_path}")
+                        error_msg = f"找不到文件夹ID: {abs_folder_path}"
+                        logger.warning(f"{error_msg} / {file_info}")
+                        # 记录失败信息
+                        failed_image = FailedImage(file_path=file_path,
+                                                   folder_path=folder_path,
+                                                   error_message=error_msg)
+                        session.add(failed_image)
                         failed_count += 1
                         continue
 
@@ -177,11 +191,26 @@ class InitializationService:
                                 f"分片 {chunk_id}: 已处理 {success_count}/{len(files)} 个文件"
                             )
                     else:
+                        # 处理失败，记录到失败表
+                        failed_image = FailedImage(file_path=file_path,
+                                                   folder_path=folder_path,
+                                                   error_message="图片处理失败")
+                        session.add(failed_image)
                         failed_count += 1
 
                 except Exception as e:
-                    logger.error(f"处理文件失败 {file_path}: {str(e)}")
+                    error_msg = f"处理文件失败: {str(e)}"
+                    logger.error(f"{error_msg} - {file_path}")
+                    # 记录异常信息
+                    failed_image = FailedImage(file_path=file_path,
+                                               folder_path=folder_path,
+                                               error_message=error_msg)
+                    session.add(failed_image)
                     failed_count += 1
+
+                # 定期提交以避免事务过大
+                if (idx % 10) == 0:
+                    session.commit()
 
             session.commit()
             return success_count, failed_count

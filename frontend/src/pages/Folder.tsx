@@ -223,7 +223,7 @@ export const Folder = () => {
           image={selectedImage}
           images={allImages}
           onClose={() => setSelectedImage(null)}
-          onNavigate={handleImageNavigation}
+          onNavigate={(image) => setSelectedImage(image)}
         />
       </div>
     </div>

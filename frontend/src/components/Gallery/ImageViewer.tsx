@@ -20,10 +20,21 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
   const hasPrev = currentIndex > 0;
   const hasNext = currentIndex < images.length - 1;
 
+  // 处理导航
+  const handleNavigate = (direction: 'prev' | 'next') => {
+    if (isZoomed) return;
+    
+    if (direction === 'prev' && hasPrev) {
+      onNavigate(images[currentIndex - 1]);
+    } else if (direction === 'next' && hasNext) {
+      onNavigate(images[currentIndex + 1]);
+    }
+  };
+
   // 滑动手势处理
   const swipeHandlers = useSwipeable({
-    onSwipedLeft: () => !isZoomed && hasNext && onNavigate('next'),
-    onSwipedRight: () => !isZoomed && hasPrev && onNavigate('prev'),
+    onSwipedLeft: () => !isZoomed && hasNext && handleNavigate('next'),
+    onSwipedRight: () => !isZoomed && hasPrev && handleNavigate('prev'),
     preventDefaultTouchmoveEvent: true,
     trackMouse: false
   });
@@ -31,6 +42,9 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
   if (!image) return null;
 
   const hasExif = image.exif_data && Object.keys(image.exif_data).length > 0;
+
+  // 获取显示路径
+  const displayPath = image.converted_path || image.file_path;
 
   // 格式化 EXIF 数据显示
   const formatExifData = (exif: any) => {
@@ -108,7 +122,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
             className="absolute left-4 p-2 text-white/70 hover:text-white z-50"
             onClick={(e) => {
               e.stopPropagation();
-              onNavigate('prev');
+              handleNavigate('prev');
             }}
           >
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -141,50 +155,46 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
                 mode: "reset"
               }}
             >
-              {({ zoomIn, zoomOut, resetTransform }) => (
-                <>
-                  <TransformComponent
-                    wrapperClass="!w-full !h-full"
-                    contentClass="!w-full !h-full"
-                  >
-                    <motion.img
-                      src={image.is_heic && image.converted_path ? image.converted_path : image.file_path}
-                      alt=""
-                      className="max-w-full max-h-[90vh] object-contain cursor-zoom-in"
-                      initial={{ scale: 0.8, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                    />
-                  </TransformComponent>
-                  
-                  {/* 缩放控制按钮 */}
-                  <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
-                    <button
-                      onClick={() => zoomOut()}
-                      className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => resetTransform()}
-                      className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16h16" />
-                      </svg>
-                    </button>
-                    <button
-                      onClick={() => zoomIn()}
-                      className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                      </svg>
-                    </button>
-                  </div>
-                </>
-              )}
+              <TransformComponent
+                wrapperClass="!w-full !h-full"
+                contentClass="!w-full !h-full"
+              >
+                <motion.img
+                  src={displayPath}
+                  alt=""
+                  className="max-w-full max-h-[90vh] object-contain cursor-zoom-in"
+                  initial={{ scale: 0.8, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                />
+              </TransformComponent>
+              
+              {/* 缩放控制按钮 */}
+              <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
+                <button
+                  onClick={() => zoomOut()}
+                  className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => resetTransform()}
+                  className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v16h16" />
+                  </svg>
+                </button>
+                <button
+                  onClick={() => zoomIn()}
+                  className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                  </svg>
+                </button>
+              </div>
             </TransformWrapper>
           )}
         </div>
@@ -195,7 +205,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
             className="absolute right-4 p-2 text-white/70 hover:text-white z-50"
             onClick={(e) => {
               e.stopPropagation();
-              onNavigate('next');
+              handleNavigate('next');
             }}
           >
             <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">

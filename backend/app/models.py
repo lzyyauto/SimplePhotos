@@ -62,6 +62,8 @@ class FailedImage(Base):
     __tablename__ = "failed_images"
 
     id = Column(Integer, primary_key=True, index=True)
-    file_path = Column(String)
+    file_path = Column(String, unique=True, index=True)
+    folder_path = Column(String)
     error_message = Column(String)
     created_at = Column(DateTime, default=datetime.now)
+    retry_count = Column(Integer, default=0)
