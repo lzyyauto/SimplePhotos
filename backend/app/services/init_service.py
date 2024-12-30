@@ -5,12 +5,8 @@ from typing import Any, Dict, List, Tuple
 
 from app.config import settings
 from app.database.database import engine  # 确保导入 engine
-from app.models import (
-    Base,
-    FailedImage,
-    FileInfo,
-    Folder,  # 从 app.models 导入
-    FolderInfo)
+from app.models import Folder  # 从 app.models 导入
+from app.models import Base, FailedImage, FileInfo, FolderInfo
 from app.services.file_service import FileService
 from app.services.image_service import ImageService
 from app.utils.logger import logger

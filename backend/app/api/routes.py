@@ -1,3 +1,4 @@
+import asyncio
 from math import ceil
 from typing import List
 
@@ -6,6 +7,7 @@ from app.config import settings
 from app.database.database import engine, get_db
 from app.database.models import Folder, Image
 from app.services.file_service import FileService
+from app.services.folder_service import FolderService
 from app.services.image_service import ImageService
 from app.services.init_service import InitializationService
 from app.utils.logger import logger
@@ -134,6 +136,11 @@ async def get_subfolders(parent_id: int = 1,
         base_query = db.query(Folder).filter(Folder.parent_id.is_(None))
     else:
         base_query = db.query(Folder).filter(Folder.parent_id == parent_id)
+
+    # 补偿机制
+    folder_service = FolderService(db)
+    # 异步触发文件夹内容验证
+    asyncio.create_task(folder_service.validate_folder_content(parent_id))
 
     # 获取总数
     total_folders = base_query.count()

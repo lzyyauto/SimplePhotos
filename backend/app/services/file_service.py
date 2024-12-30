@@ -1,5 +1,8 @@
+import asyncio
 import mimetypes
 import os
+import threading
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -18,45 +21,88 @@ from watchdog.observers.polling import PollingObserver
 class FileWatcher(FileSystemEventHandler):
 
     def __init__(self, db: Session, image_service: ImageService):
-        # self.db = db
-        # self.image_service = image_service
-        # self.loop = asyncio.get_event_loop()
-        logger.info("初始化文件监控服务2")
+        self.db = db
+        self.image_service = image_service
+        self.pending_files = {}
+        self.processing_lock = threading.Lock()  # 改用线程锁
+        self.loop = asyncio.new_event_loop()  # 创建新的事件循环
+        self.thread = threading.Thread(target=self._run_event_loop,
+                                       daemon=True)
+        self.thread.start()
+        logger.info("初始化文件监控服务")
+
+    def _run_event_loop(self):
+        """在独立线程中运行事件循环"""
+        asyncio.set_event_loop(self.loop)
+        self.loop.run_forever()
 
     def on_created(self, event):
         if not event.is_directory and self._is_valid_image(event.src_path):
-            # 使用 call_later 调用同步方法，该方法内部创建异步任务
-            self.loop.call_later(10, self._schedule_process_file,
-                                 event.src_path)
+            with self.processing_lock:
+                self.pending_files[event.src_path] = time.time()
+            # 使用 loop.call_later 代替 create_task
+            self.loop.call_later(
+                10,
+                lambda: self.loop.create_task(self._process_pending_files()))
 
-    def _schedule_process_file(self, file_path: str):
-        """创建异步任务来处理文件"""
-        asyncio.create_task(self._process_new_file(file_path))
+    async def _process_pending_files(self):
+        """处理待处理文件"""
+        with self.processing_lock:
+            current_time = time.time()
+            files_to_process = {
+                path: timestamp
+                for path, timestamp in self.pending_files.items()
+                if current_time - timestamp >= 10
+            }
 
-    async def _process_new_file(self, file_path: str):
-        try:
-            # 检查文件是否存在且可读
-            if not os.path.exists(file_path):
-                logger.warning(f"文件不存在: {file_path}")
+            if not files_to_process:
                 return
 
-            # 检查文件大小是否为0
-            if os.path.getsize(file_path) == 0:
-                logger.warning(f"文件大小为0: {file_path}")
-                return
+            # 从待处理队列中移除这些文件
+            for path in files_to_process:
+                self.pending_files.pop(path)
 
-            # 获取文件所在文件夹
-            rel_path = os.path.relpath(os.path.dirname(file_path),
-                                       settings.IMAGES_DIR)
-            folder = self.db.query(Folder).filter(
-                Folder.folder_path == rel_path).first()
+            # 按文件夹分组
+            files_by_folder = {}
+            for file_path in files_to_process:
+                folder_path = os.path.dirname(file_path)
+                files_by_folder.setdefault(folder_path, []).append(file_path)
 
-            if folder:
-                await self.image_service.process_image(file_path,
-                                                       folder_id=folder.id)
-                logger.info(f"成功处理新文件: {file_path}")
-        except Exception as e:
-            logger.error(f"处理新文件失败: {file_path}, 错误: {str(e)}")
+            # 批量处理每个文件夹中的文件
+            for folder_path, files in files_by_folder.items():
+                try:
+                    # 获取文件夹ID
+                    rel_path = os.path.relpath(folder_path,
+                                               settings.IMAGES_DIR)
+                    folder = self.db.query(Folder).filter(
+                        Folder.folder_path == rel_path).first()
+
+                    if not folder:
+                        logger.warning(f"找不到文件夹: {folder_path}")
+                        continue
+
+                    # 批量处理文件
+                    for file_path in files:
+                        try:
+                            file_info = FileInfo(
+                                full_path=file_path,
+                                rel_path=os.path.relpath(
+                                    file_path, settings.IMAGES_DIR),
+                                folder_path=folder_path,
+                                mime_type=mimetypes.guess_type(file_path)[0],
+                                size=os.path.getsize(file_path),
+                                created_at=datetime.fromtimestamp(
+                                    os.path.getctime(file_path)))
+                            await self.image_service.process_image(
+                                file_info, folder.id)
+                            logger.info(f"成功处理新文件: {file_path}")
+                        except Exception as e:
+                            logger.error(f"处理文件失败: {file_path}, 错误: {str(e)}")
+
+                    self.db.commit()
+                except Exception as e:
+                    logger.error(f"处理文件夹失败: {folder_path}, 错误: {str(e)}")
+                    self.db.rollback()
 
     def on_deleted(self, event):
         if not event.is_directory and self._is_valid_image(event.src_path):

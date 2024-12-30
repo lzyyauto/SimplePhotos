@@ -18,20 +18,6 @@ from fastapi.staticfiles import StaticFiles
 # 全局服务实例
 file_service: Optional[FileService] = None
 
-
-def shutdown(signal_type):
-    """处理关闭信号"""
-    logger.info(f"收到 {signal_type} 信号，开始清理...")
-    if file_service:
-        file_service.stop_watching()
-        logger.info("文件监控服务已停止")
-    sys.exit(0)
-
-
-# 注册信号处理
-signal.signal(signal.SIGINT, lambda s, f: shutdown('SIGINT'))
-signal.signal(signal.SIGTERM, lambda s, f: shutdown('SIGTERM'))
-
 # 创建数据库表
 logger.info("正在创建数据库表...")
 models.Base.metadata.create_all(bind=engine)
@@ -57,6 +43,10 @@ async def lifespan(app: FastAPI):
             raise
 
         finally:
+            # 无论初始化是否成功，都启动文件监控
+            file_service = FileService(db)
+            file_service.start_watching(settings.IMAGES_DIR)
+            logger.info("文件监控服务已启动")
             db.close()
 
         yield
