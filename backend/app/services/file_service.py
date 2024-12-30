@@ -37,13 +37,24 @@ class FileWatcher(FileSystemEventHandler):
         self.loop.run_forever()
 
     def on_created(self, event):
-        if not event.is_directory and self._is_valid_image(event.src_path):
-            with self.processing_lock:
-                self.pending_files[event.src_path] = time.time()
-            # 使用 loop.call_later 代替 create_task
-            self.loop.call_later(
-                10,
-                lambda: self.loop.create_task(self._process_pending_files()))
+        """文件创建事件处理"""
+        try:
+            if not event.is_directory:
+                file_path = event.src_path
+                logger.info(f"检测到新文件: {file_path}")
+
+                if self._is_valid_image(file_path):
+                    logger.info(f"添加文件到待处理队列: {file_path}")
+                    with self.processing_lock:
+                        self.pending_files[file_path] = time.time()
+                    # 延迟处理
+                    self.loop.call_later(
+                        10, lambda: self.loop.create_task(
+                            self._process_pending_files()))
+                else:
+                    logger.debug(f"忽略不支持的文件类型: {file_path}")
+        except Exception as e:
+            logger.error(f"处理文件创建事件失败: {str(e)}")
 
     async def _process_pending_files(self):
         """处理待处理文件"""
@@ -117,8 +128,9 @@ class FileWatcher(FileSystemEventHandler):
             except Exception as e:
                 logger.error(f"处理文件删除失败: {str(e)}")
 
-    def _is_valid_image(self, path: str) -> bool:
-        return any(path.lower().endswith(ext)
+    def _is_valid_image(self, file_path: str) -> bool:
+        """检查是否为支持的文件类型"""
+        return any(file_path.lower().endswith(ext)
                    for ext in settings.SUPPORTED_FORMATS)
 
 
