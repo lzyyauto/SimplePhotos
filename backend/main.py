@@ -43,10 +43,13 @@ async def lifespan(app: FastAPI):
             raise
 
         finally:
-            # 无论初始化是否成功，都启动文件监控
-            file_service = FileService(db)
-            file_service.start_watching(settings.IMAGES_DIR)
-            logger.info("文件监控服务已启动")
+            # 根据配置决定是否启动文件监控
+            if settings.ENABLE_FILE_WATCHER:
+                file_service = FileService(db)
+                file_service.start_watching(settings.IMAGES_DIR)
+                logger.info("文件监控服务已启动")
+            else:
+                logger.info("文件监控服务已禁用")
             db.close()
 
         yield

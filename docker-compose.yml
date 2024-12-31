@@ -12,6 +12,7 @@ services:
       - LC_ALL=zh_CN.UTF-8
       - DATA_ROOT=/app/data
       - IMAGES_DIR=/app/data/images
+      - ENABLE_FILE_WATCHER=true  # 启用文件监控
       - SCAN_WORKERS=4       # 最大线程数，建议设置为 CPU 核心数的 2-4 倍
       - SCAN_CHUNK_SIZE=20    # 每个分片的文件数，可以根据文件大小调整
       - DB_TYPE=mysql         # 不填写mysql相关就是默认sqlite

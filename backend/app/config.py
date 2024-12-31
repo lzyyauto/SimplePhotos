@@ -7,7 +7,7 @@ from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
     # 基础配置
-    APP_NAME: str = "SimplePhotos Backend"
+    APP_NAME: str = "SimplePhotos"
     DEBUG: bool = True
 
     # 基础路径配置
@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     # 扫描处理配置 - 使用简单的环境变量覆盖
     SCAN_WORKERS: int = int(os.getenv('SCAN_WORKERS', os.cpu_count() or 4))
     SCAN_CHUNK_SIZE: int = int(os.getenv('SCAN_CHUNK_SIZE', 20))
+
+    ENABLE_FILE_WATCHER: bool = bool(os.getenv('ENABLE_FILE_WATCHER', True))
 
     def __init__(self):
         super().__init__()
