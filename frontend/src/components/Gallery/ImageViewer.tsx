@@ -1,6 +1,6 @@
 import { Image } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, useRef } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
 import { useSwipeable } from 'react-swipeable';
 
@@ -14,6 +14,9 @@ interface ImageViewerProps {
 export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerProps) => {
   const [showExif, setShowExif] = useState(false);
   const [isZoomed, setIsZoomed] = useState(false);
+  
+  // 添加 ref 来获取 transform 实例
+  const transformRef = useRef<any>(null);
 
   // 获取当前图片索引
   const currentIndex = image ? images.findIndex(img => img.id === image.id) : -1;
@@ -145,6 +148,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
             />
           ) : (
             <TransformWrapper
+              ref={transformRef}
               initialScale={1}
               minScale={0.5}
               maxScale={4}
@@ -155,10 +159,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
                 mode: "reset"
               }}
             >
-              <TransformComponent
-                wrapperClass="!w-full !h-full"
-                contentClass="!w-full !h-full"
-              >
+              <TransformComponent>
                 <motion.img
                   src={displayPath}
                   alt=""
@@ -171,7 +172,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
               {/* 缩放控制按钮 */}
               <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex gap-2">
                 <button
-                  onClick={() => zoomOut()}
+                  onClick={() => transformRef.current?.zoomOut()}
                   className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -179,7 +180,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
                   </svg>
                 </button>
                 <button
-                  onClick={() => resetTransform()}
+                  onClick={() => transformRef.current?.resetTransform()}
                   className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -187,7 +188,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
                   </svg>
                 </button>
                 <button
-                  onClick={() => zoomIn()}
+                  onClick={() => transformRef.current?.zoomIn()}
                   className="p-2 rounded-full bg-black/50 text-white hover:bg-black/70"
                 >
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

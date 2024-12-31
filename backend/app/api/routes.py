@@ -133,9 +133,11 @@ async def get_subfolders(parent_id: int = 1,
     """获取指定文件夹下的所有子文件夹（分页）"""
     # 构建基础查询
     if parent_id == 0:  # 约定 0 为根��录
-        base_query = db.query(Folder).filter(Folder.parent_id.is_(None))
+        base_query = db.query(Folder).filter(
+            Folder.parent_id.is_(None)).order_by(Folder.name.asc())
     else:
-        base_query = db.query(Folder).filter(Folder.parent_id == parent_id)
+        base_query = db.query(Folder).filter(
+            Folder.parent_id == parent_id).order_by(Folder.name.asc())
 
     # 补偿机制
     folder_service = FolderService(db)
