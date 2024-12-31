@@ -140,12 +140,24 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
           onClick={e => e.stopPropagation()}
         >
           {image.file_path.toLowerCase().endsWith('.mp4') ? (
-            <video
-              src={image.file_path}
-              className="max-w-full max-h-[90vh] object-contain"
-              controls
-              autoPlay
-            />
+            <div 
+              className="relative max-w-[90vw] max-h-[90vh]" 
+              onClick={e => e.stopPropagation()}
+            >
+              <video
+                src={image.file_path}
+                className="max-w-full max-h-[90vh] object-contain"
+                controls
+                autoPlay
+                controlsList="nodownload"  // 禁用下载按钮
+                playsInline  // 内联播放
+                onClick={e => e.stopPropagation()}
+                onMouseDown={e => e.stopPropagation()}
+                onTouchStart={e => e.stopPropagation()}
+                onSeeking={e => e.stopPropagation()}
+                onSeeked={e => e.stopPropagation()}
+              />
+            </div>
           ) : (
             <TransformWrapper
               ref={transformRef}
