@@ -157,14 +157,22 @@ class FolderService:
     def _process_deleted_folder(self, folder_path: str) -> None:
         """处理已删除的文件夹"""
         try:
+            # 获取文件夹
             folder = self.db.query(Folder).filter(
                 Folder.folder_path == folder_path).first()
             if folder:
+                # 删除与该文件夹相关的所有图像
+                images = self.db.query(Image).filter(
+                    Image.folder_id == folder.id).all()
+                for image in images:
+                    self.db.delete(image)
+                # 删除文件夹
                 self.db.delete(folder)
                 self.db.commit()
                 logger.info(f"删除不存在的文件夹记录: {folder_path}")
         except Exception as e:
             logger.error(f"删除文件夹记录失败 {folder_path}: {str(e)}")
+            self.db.rollback()  # 确保在出错时回滚事务
 
     def _is_supported_file(self, filename: str) -> bool:
         """检查是否为支持的文件类型"""
