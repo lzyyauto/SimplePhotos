@@ -161,14 +161,23 @@ class FolderService:
             folder = self.db.query(Folder).filter(
                 Folder.folder_path == folder_path).first()
             if folder:
+                # 递归删除子文件夹
+                subfolders = self.db.query(Folder).filter(
+                    Folder.parent_id == folder.id).all()
+                for subfolder in subfolders:
+                    self._process_deleted_folder(
+                        subfolder.folder_path)  # 递归删除子文件夹
+
                 # 删除与该文件夹相关的所有图像
                 images = self.db.query(Image).filter(
                     Image.folder_id == folder.id).all()
                 for image in images:
                     self.db.delete(image)
+                self.db.commit()  # 提交删除图像的事务
+
                 # 删除文件夹
                 self.db.delete(folder)
-                self.db.commit()
+                self.db.commit()  # 提交删除文件夹的事务
                 logger.info(f"删除不存在的文件夹记录: {folder_path}")
         except Exception as e:
             logger.error(f"删除文件夹记录失败 {folder_path}: {str(e)}")
