@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     SCAN_WORKERS: int = int(os.getenv('SCAN_WORKERS', os.cpu_count() or 4))
     SCAN_CHUNK_SIZE: int = int(os.getenv('SCAN_CHUNK_SIZE', 20))
 
-    ENABLE_FILE_WATCHER: bool = bool(os.getenv('ENABLE_FILE_WATCHER', True))
+    ENABLE_FILE_WATCHER: bool = bool(os.getenv('ENABLE_FILE_WATCHER', False))
 
     def __init__(self):
         super().__init__()

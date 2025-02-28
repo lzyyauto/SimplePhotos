@@ -5,11 +5,12 @@ from typing import Any, Dict, List, Tuple
 
 from app.config import settings
 from app.database.database import engine  # 确保导入 engine
-from app.models import Folder  # 从 app.models 导入
+from app.models import Folder, Image  # 从 app.models 导入
 from app.models import Base, FailedImage, FileInfo, FolderInfo
 from app.services.file_service import FileService
 from app.services.image_service import ImageService
 from app.utils.logger import logger
+from sqlalchemy import text
 from sqlalchemy.orm import Session, sessionmaker
 
 
@@ -78,10 +79,92 @@ class InitializationService:
             logger.error(f"数据库初始化失败: {str(e)}", exc_info=True)
             return False
 
-    async def process_folders(self) -> bool:
+    async def full_scan(self) -> Tuple[bool, str]:
+        """执行全盘扫描，强制重新扫描所有文件夹和文件
+        Returns:
+            Tuple[bool, str]: (是否成功, 错误信息)
+        """
+        try:
+            logger.info("开始执行全盘扫描...")
+
+            # 确保数据库表存在
+            Base.metadata.create_all(bind=engine)
+            logger.info("确认数据库表结构完整")
+
+            # 检查图片目录是否存在
+            if not os.path.exists(settings.IMAGES_DIR):
+                error_msg = f"图片目录不存在: {settings.IMAGES_DIR}"
+                logger.error(error_msg)
+                return False, error_msg
+
+            logger.info(f"开始全盘扫描图片目录: {settings.IMAGES_DIR}")
+
+            # 清空文件夹映射表
+            self.folders_map = {}
+
+            # 第一阶段：处理文件夹
+            try:
+                if not await self.process_folders(force_rescan=True):
+                    error_msg = "文件夹处理失败"
+                    logger.error(error_msg)
+                    return False, error_msg
+            except Exception as e:
+                error_msg = f"文件夹处理异常: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                return False, error_msg
+
+            # 第二阶段：处理文件
+            try:
+                if not await self.process_files(force_rescan=True):
+                    error_msg = "文件处理失败"
+                    logger.error(error_msg)
+                    return False, error_msg
+            except Exception as e:
+                error_msg = f"文件处理异常: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                return False, error_msg
+
+            logger.info("全盘扫描完成")
+            return True, "扫描完成"
+
+        except Exception as e:
+            error_msg = f"全盘扫描失败: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return False, error_msg
+
+    async def process_folders(self, force_rescan: bool = False) -> bool:
         """处理文件夹"""
         try:
             logger.info("开始处理文件夹...")
+
+            # 如果是强制重新扫描，先清空文件夹表
+            if force_rescan:
+                with self.Session() as session:
+                    try:
+                        # 先删除 Image 表中的所有记录，因为它引用了 folders 表
+                        session.query(Image).delete()
+                        
+                        # 删除 FailedImage 表中的记录
+                        session.query(FailedImage).delete()
+                        
+                        # 使用 SQL 直接删除 folders 表中的记录，禁用外键约束检查
+                        # 对于 MySQL
+                        if settings.DB_TYPE == 'mysql':
+                            session.execute(text("SET FOREIGN_KEY_CHECKS=0"))
+                            session.execute(text("TRUNCATE TABLE folders"))
+                            session.execute(text("SET FOREIGN_KEY_CHECKS=1"))
+                        # 对于 SQLite
+                        else:
+                            session.execute(text("PRAGMA foreign_keys=OFF"))
+                            session.execute(text("DELETE FROM folders"))
+                            session.execute(text("PRAGMA foreign_keys=ON"))
+                        
+                        session.commit()
+                        logger.info("已清空相关表，准备重新扫描")
+                    except Exception as e:
+                        session.rollback()
+                        logger.error(f"清空表失败: {str(e)}")
+                        return False
 
             # 先创建根目录
             with self.Session() as session:
@@ -89,9 +172,9 @@ class InitializationService:
                     Folder.folder_path == ".").first()
                 if not root:
                     root_info = FolderInfo(full_path=settings.IMAGES_DIR,
-                                           rel_path=".",
-                                           name="root",
-                                           parent_path=0)
+                                          rel_path=".",
+                                          name="root",
+                                          parent_path=0)
                     root = self.file_service.save_folder(root_info, session)
                     session.commit()
                     logger.info("创建根目录成功")
@@ -121,10 +204,15 @@ class InitializationService:
             logger.error(f"处理文件夹失败: {str(e)}")
             return False
 
-    async def process_files(self) -> bool:
+    async def process_files(self, force_rescan: bool = False) -> bool:
         """处理文件"""
         try:
             logger.info("开始处理文件...")
+            
+            # 如果是强制重新扫描，先清空相关表
+            # 注意：现在我们在 process_folders 中已经清空了所有相关表
+            # 这里不再需要重复清空操作
+            
             _, all_files = self.file_service.collect_paths()
 
             # 分片处理
