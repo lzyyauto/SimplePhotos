@@ -115,31 +115,14 @@ export const Folder = () => {
 
   // 处理图片导航
   const handleImageNavigation = (direction: 'prev' | 'next') => {
-    if (!selectedImage || !imagesData?.items) return;
+    if (!selectedImage) return;
     
-    const currentIndex = imagesData.items.findIndex(img => img.id === selectedImage.id);
+    const currentIndex = allImages.findIndex(img => img.id === selectedImage.id);
     if (currentIndex === -1) return;
 
-    let newIndex: number;
-    if (direction === 'next') {
-      newIndex = currentIndex + 1;
-      // 如果是最后一张且还有下一页，加载下一页
-      if (newIndex >= imagesData.items.length && page < imagesData.total_pages) {
-        setPage(page + 1);
-        newIndex = 0;
-      }
-    } else {
-      newIndex = currentIndex - 1;
-      // 如果是第一张且还有上一页，加载上一页
-      if (newIndex < 0 && page > 1) {
-        setPage(page - 1);
-        newIndex = settings.PAGE_SIZE - 1;
-      }
-    }
-
-    // 在当前页内导航
-    if (newIndex >= 0 && newIndex < imagesData.items.length) {
-      setSelectedImage(imagesData.items[newIndex]);
+    const nextIndex = direction === 'next' ? currentIndex + 1 : currentIndex - 1;
+    if (nextIndex >= 0 && nextIndex < allImages.length) {
+      setSelectedImage(allImages[nextIndex]);
     }
   };
 
@@ -223,9 +206,9 @@ export const Folder = () => {
           image={selectedImage}
           images={allImages}
           onClose={() => setSelectedImage(null)}
-          onNavigate={(image) => setSelectedImage(image)}
+          onNavigate={handleImageNavigation}
         />
       </div>
     </div>
   );
-}; 
+};

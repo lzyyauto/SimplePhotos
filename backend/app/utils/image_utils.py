@@ -18,13 +18,21 @@ class ImageProcessor:
     async def create_thumbnail(image_path: str, thumb_path: str):
         """创建缩略图"""
         try:
-            if image_path.lower().endswith('.mp4'):
+            # 修正 endswith 方法的使用，使用元组作为参数
+            if image_path.lower().endswith(('.mp4', '.mov')):
+                # 处理视频文件
                 await ImageProcessor._create_video_thumbnail(
                     image_path, thumb_path)
             elif image_path.lower().endswith('.gif'):
+                # 处理 GIF 文件
                 await ImageProcessor._create_gif_thumbnail(
                     image_path, thumb_path)
+            elif image_path.lower().endswith(('.heic', '.heif')):
+                # 处理 HEIC/HEIF 文件 - 注意这里不需要转换，因为转换已经在 image_service 中完成
+                await ImageProcessor._create_image_thumbnail(
+                    image_path, thumb_path)
             else:
+                # 处理普通图片
                 await ImageProcessor._create_image_thumbnail(
                     image_path, thumb_path)
         except Exception as e:

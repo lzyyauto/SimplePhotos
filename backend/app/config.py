@@ -40,7 +40,7 @@ class Settings(BaseSettings):
 
     # 图片相关配置
     SUPPORTED_FORMATS: List[str] = [
-        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif", ".mp4"
+        ".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".heif", ".mp4", ".mov"
     ]
     THUMBNAIL_SIZE: tuple = (200, 200)
 

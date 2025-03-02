@@ -24,15 +24,43 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
   const hasNext = currentIndex < images.length - 1;
 
   // 处理导航
-  const handleNavigate = (direction: 'prev' | 'next') => {
+  const handleNavigate = useCallback((direction: 'prev' | 'next') => {
     if (isZoomed) return;
     
     if (direction === 'prev' && hasPrev) {
-      onNavigate(images[currentIndex - 1]);
+      onNavigate('prev');
     } else if (direction === 'next' && hasNext) {
-      onNavigate(images[currentIndex + 1]);
+      onNavigate('next');
     }
-  };
+  }, [isZoomed, onNavigate, hasPrev, hasNext]);
+
+  // 添加键盘事件处理
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      switch (e.key) {
+        case 'ArrowLeft':
+          if (hasPrev) handleNavigate('prev');
+          break;
+        case 'ArrowRight':
+          if (hasNext) handleNavigate('next');
+          break;
+        case 'Escape':
+          onClose();
+          break;
+        case 'ArrowUp':
+          transformRef.current?.zoomIn();
+          break;
+        case 'ArrowDown':
+          transformRef.current?.zoomOut();
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [hasPrev, hasNext, handleNavigate, onClose]);
 
   // 滑动手势处理
   const swipeHandlers = useSwipeable({
@@ -139,7 +167,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
           className="max-w-[90vw] max-h-[90vh] relative" 
           onClick={e => e.stopPropagation()}
         >
-          {image.file_path.toLowerCase().endsWith('.mp4') ? (
+          {image && image.file_path && image.file_path.toLowerCase().endsWith('.mp4') ? (
             <div 
               className="relative max-w-[90vw] max-h-[90vh]" 
               onClick={e => e.stopPropagation()}
@@ -229,4 +257,4 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
       </motion.div>
     </AnimatePresence>
   );
-}; 
+};

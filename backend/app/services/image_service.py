@@ -132,5 +132,7 @@ class ImageService:
             return 'gif'
         elif ext in ('.heic', '.heif'):
             return 'heif'
+        elif ext in ('.mp4', '.mov'):
+            return 'video'
         else:
             return 'unknown'
