@@ -80,9 +80,9 @@ export const Home = () => {
   const allImages = imagesData?.pages?.flatMap(page => page?.items || []) ?? [];
 
   return (
-    <div className="h-[calc(100vh-4rem)] overflow-y-auto hide-scrollbar">
-      <div className="p-4">
-        <h1 className="text-2xl font-bold mb-6">{title}</h1>
+    <div className="h-[calc(100vh-4rem)] overflow-y-auto hide-scrollbar bg-gray-50/50 dark:bg-[#0B0F19] transition-colors duration-300">
+      <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto pb-12">
+        <h1 className="text-3xl md:text-4xl font-extrabold mb-8 text-gray-900 dark:text-white tracking-tight">{title}</h1>
 
         {/* 加载状态 */}
         {(isFoldersLoading || isImagesLoading) && (
@@ -93,8 +93,11 @@ export const Home = () => {
         
         {/* 文件夹网格 */}
         {allFolders.length > 0 && (
-          <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">文件夹 ({allFolders.length})</h2>
+          <div className="mb-10">
+            <div className="flex items-center mb-5">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">图库文件夹</h2>
+              <span className="text-xs font-semibold text-gray-500 bg-gray-200/60 dark:bg-gray-800 px-2.5 py-0.5 rounded-full ml-3">{allFolders.length}</span>
+            </div>
             <FolderGrid
               folders={allFolders}
               onFolderClick={(folder) => navigate(`/folder/${folder.id}`)}
@@ -108,7 +111,10 @@ export const Home = () => {
 
         {/* 图片网格 */}
         <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">图片 ({allImages.length})</h2>
+          <div className="flex items-center mb-5">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100">所有图片</h2>
+            <span className="text-xs font-semibold text-gray-500 bg-gray-200/60 dark:bg-gray-800 px-2.5 py-0.5 rounded-full ml-3">{allImages.length}</span>
+          </div>
           <ImageGrid
             images={allImages}
             onImageClick={setSelectedImage}

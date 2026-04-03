@@ -19,6 +19,22 @@ from sqlalchemy.orm import Session
 router = APIRouter()
 
 
+def _build_image_dict(image: Image) -> dict:
+    """将 Image ORM 对象转换为前端可用的字典，路径转换为 URL 路径"""
+    return {
+        "id": image.id,
+        "folder_id": image.folder_id,
+        "file_path": f"/data/images/{image.file_path}" if image.file_path else None,
+        "thumbnail_path": f"/data/thumbnails/{image.thumbnail_path}" if image.thumbnail_path else None,
+        "converted_path": f"/data/converted/{image.converted_path}" if image.converted_path else None,
+        "mime_type": image.mime_type,
+        "image_type": image.image_type,
+        "is_heic": image.is_heic,
+        "exif_data": image.exif_data,
+        "created_at": image.created_at.isoformat() if image.created_at else None,
+        "updated_at": image.updated_at.isoformat() if image.updated_at else None,
+    }
+
 @router.get("/folders", response_model=List[schemas.Folder])
 async def get_folders(db: Session = Depends(get_db)):
     """获取所有文件夹列表"""
@@ -44,24 +60,8 @@ async def get_folder_images(
         .all()
     )
 
-    def build_image_dict(image: Image) -> dict:
-        """将 Image ORM 对象转换为前端可用的字典，路径转换为 URL 路径"""
-        return {
-            "id": image.id,
-            "folder_id": image.folder_id,
-            "file_path": f"/data/images/{image.file_path}" if image.file_path else None,
-            "thumbnail_path": f"/data/thumbnails/{image.thumbnail_path}" if image.thumbnail_path else None,
-            "converted_path": f"/data/converted/{image.converted_path}" if image.converted_path else None,
-            "mime_type": image.mime_type,
-            "image_type": image.image_type,
-            "is_heic": image.is_heic,
-            "exif_data": image.exif_data,
-            "created_at": image.created_at.isoformat() if image.created_at else None,
-            "updated_at": image.updated_at.isoformat() if image.updated_at else None,
-        }
-
     return {
-        "items": [build_image_dict(img) for img in images],
+        "items": [_build_image_dict(img) for img in images],
         "total": total_images,
         "page": page,
         "total_pages": total_pages,
@@ -93,9 +93,9 @@ async def trigger_full_scan(db: Session = Depends(get_db)):
         FolderService.clear_all_cache()
 
         return {"status": "success", "message": message}
-    except HTTPException:
-        raise
     except Exception as e:
+        if isinstance(e, HTTPException):
+            raise
         logger.error(f"手动扫描失败: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -132,15 +132,9 @@ async def get_subfolders(
     db: Session = Depends(get_db),
 ):
     """获取指定文件夹下的所有子文件夹（分页）"""
-    if parent_id == 0:
-        # 约定 0 为根目录（parent_id 为 NULL 的记录）
-        base_query = db.query(Folder).filter(
-            Folder.parent_id.is_(None)
-        ).order_by(Folder.name.asc())
-    else:
-        base_query = db.query(Folder).filter(
-            Folder.parent_id == parent_id
-        ).order_by(Folder.name.asc())
+    # 约定 0 为根目录（parent_id 为 NULL 的记录）
+    filter_condition = Folder.parent_id.is_(None) if parent_id == 0 else Folder.parent_id == parent_id
+    base_query = db.query(Folder).filter(filter_condition).order_by(Folder.name.asc())
 
     # 后台异步触发文件夹内容验证（补偿机制）
     folder_service = FolderService(db)

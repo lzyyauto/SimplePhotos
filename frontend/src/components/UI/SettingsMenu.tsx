@@ -1,12 +1,12 @@
-import ReactDOM from 'react-dom/client'
-import { Menu } from '@headlessui/react'
+import { Menu, Transition } from '@headlessui/react'
+import { Fragment, useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useToastStore } from '../../stores/toastStore'
 import { api } from '../../services/api'
-import { useState } from 'react'
-import { GlobalLoading } from '../Loading/GlobalLoading'
 
 export const SettingsMenu = () => {
   const { title, desktopColumns, mobileColumns, setTitle, setDesktopColumns, setMobileColumns } = useSettingsStore()
+  const { addToast } = useToastStore()
   const [isLoading, setIsLoading] = useState(false)
   const MIN_COLUMNS = 1
   const MAX_COLUMNS = 12
@@ -14,47 +14,19 @@ export const SettingsMenu = () => {
   const handleRefreshLibrary = async () => {
     if (isLoading) return;
     setIsLoading(true)
-
-    // 添加加载动画到 body
-    const loadingElement = document.createElement('div')
-    loadingElement.id = 'global-loading'
-    document.body.appendChild(loadingElement)
-    
-    const root = ReactDOM.createRoot(loadingElement)
-    root.render(<GlobalLoading />)
+    addToast('开始扫描图库...', 'info', 2000)
 
     try {
       const response = await api.post('/scan')
       if (response.status === 'success') {
         const message = `扫描完成！\n处理了 ${response.data.folders_processed} 个文件夹\n${response.data.images_processed} 张图片`
-        const notification = document.createElement('div')
-        notification.className = 'fixed bottom-4 right-4 bg-green-500 text-white px-6 py-4 rounded-lg shadow-lg transform transition-all duration-500 ease-in-out'
-        notification.textContent = message
-        document.body.appendChild(notification)
-        
-        setTimeout(() => {
-          notification.style.opacity = '0'
-          setTimeout(() => document.body.removeChild(notification), 500)
-        }, 3000)
+        addToast(message, 'success', 3000)
       }
     } catch (error) {
       console.error('刷新库失败:', error)
-      const errorNotification = document.createElement('div')
-      errorNotification.className = 'fixed bottom-4 right-4 bg-red-500 text-white px-6 py-4 rounded-lg shadow-lg'
-      errorNotification.textContent = '刷新库失败，请稍后重试'
-      document.body.appendChild(errorNotification)
-      
-      setTimeout(() => {
-        errorNotification.style.opacity = '0'
-        setTimeout(() => document.body.removeChild(errorNotification), 500)
-      }, 3000)
+      addToast('刷新图库失败，请稍后重试', 'error', 3000)
     } finally {
       setIsLoading(false)
-      const loadingElement = document.getElementById('global-loading')
-      if (loadingElement) {
-        loadingElement.style.opacity = '0'
-        setTimeout(() => document.body.removeChild(loadingElement), 500)
-      }
     }
   }
 
@@ -82,24 +54,24 @@ export const SettingsMenu = () => {
   }) => (
     <div className="mb-4">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-      <div className="flex items-center mt-1 relative">
+      <div className="flex items-center mt-2 p-1 bg-gray-50 dark:bg-gray-900/50 rounded-xl border border-gray-200 dark:border-white/5">
         <button
           onClick={() => handleAdjustNumber(value, setter, false)}
           disabled={value <= MIN_COLUMNS}
-          className={`px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-l
-            ${value <= MIN_COLUMNS ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          className={`flex items-center justify-center w-8 h-8 bg-white dark:bg-gray-800 rounded-lg transition-colors shadow-sm
+            ${value <= MIN_COLUMNS ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'}`}
           title={value <= MIN_COLUMNS ? "已达到最小值" : undefined}
         >
           -
         </button>
-        <div className="w-full text-center py-2 bg-white dark:bg-gray-700 border-x border-gray-300 dark:border-gray-600">
+        <div className="flex-1 text-center font-medium text-gray-900 dark:text-gray-100">
           {value}
         </div>
         <button
           onClick={() => handleAdjustNumber(value, setter, true)}
           disabled={value >= MAX_COLUMNS}
-          className={`px-3 py-2 bg-gray-100 dark:bg-gray-700 rounded-r
-            ${value >= MAX_COLUMNS ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          className={`flex items-center justify-center w-8 h-8 bg-white dark:bg-gray-800 rounded-lg transition-colors shadow-sm
+            ${value >= MAX_COLUMNS ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'}`}
           title={value >= MAX_COLUMNS ? "已达到最大值" : undefined}
         >
           +
@@ -109,10 +81,10 @@ export const SettingsMenu = () => {
   )
 
   return (
-    <Menu>
+    <Menu as="div" className="relative inline-block text-left">
       {() => (
         <>
-          <Menu.Button className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
+          <Menu.Button className="p-2 rounded-xl text-gray-500 hover:bg-gray-100/80 dark:text-gray-400 dark:hover:bg-gray-800/80 transition-colors focus:outline-none">
             {isLoading ? (
               <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -125,59 +97,74 @@ export const SettingsMenu = () => {
             )}
           </Menu.Button>
 
-          <Menu.Items className="absolute right-0 top-full mt-2 w-64 origin-top-right bg-white dark:bg-gray-800 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
-            <div className="px-4 py-3">
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">标题</label>
-                <input
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600"
+          <Transition
+            as={Fragment}
+            enter="transition ease-out duration-200"
+            enterFrom="transform opacity-0 scale-95 translate-y-2"
+            enterTo="transform opacity-100 scale-100 translate-y-0"
+            leave="transition ease-in duration-150"
+            leaveFrom="transform opacity-100 scale-100 translate-y-0"
+            leaveTo="transform opacity-0 scale-95 translate-y-2"
+          >
+            <Menu.Items className="absolute right-0 top-full mt-2 w-72 origin-top-right bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl rounded-2xl shadow-xl ring-1 ring-black/5 dark:ring-white/10 focus:outline-none z-50 p-1">
+              <div className="px-5 py-4">
+                <div className="mb-5">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">标题</label>
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="mt-2 block w-full rounded-xl border-gray-200 shadow-sm focus:border-gray-400 focus:ring-0 dark:bg-gray-800 dark:border-gray-700 dark:text-white transition-colors p-2 text-sm"
+                    placeholder="请输入相册标题"
+                  />
+                </div>
+
+                <div className="bg-gray-100 h-[1px] w-full my-4 dark:bg-gray-800"></div>
+
+                <NumberInput 
+                  value={desktopColumns} 
+                  setter={setDesktopColumns} 
+                  label="桌面端列数"
                 />
+
+                <NumberInput 
+                  value={mobileColumns} 
+                  setter={setMobileColumns} 
+                  label="移动端列数"
+                />
+
+                <div className="bg-gray-100 h-[1px] w-full my-4 dark:bg-gray-800"></div>
+
+                <Menu.Item>
+                  {({ active }) => (
+                    <button
+                      onClick={handleRefreshLibrary}
+                      disabled={isLoading}
+                      className={`${
+                        active ? 'bg-gray-100 dark:bg-gray-800' : ''
+                      } w-full flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-gray-800 dark:text-gray-200 rounded-xl transition-colors ${
+                        isLoading ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      {isLoading ? (
+                        <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                      ) : (
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      )}
+                      {isLoading ? '刷新中...' : '深度扫描图库'}
+                    </button>
+                  )}
+                </Menu.Item>
               </div>
-
-              <NumberInput 
-                value={desktopColumns} 
-                setter={setDesktopColumns} 
-                label="桌面端列数"
-              />
-
-              <NumberInput 
-                value={mobileColumns} 
-                setter={setMobileColumns} 
-                label="移动端列数"
-              />
-
-              <Menu.Item>
-                {({ active }) => (
-                  <button
-                    onClick={handleRefreshLibrary}
-                    disabled={isLoading}
-                    className={`${
-                      active ? 'bg-gray-100 dark:bg-gray-700' : ''
-                    } w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-200 rounded-md ${
-                      isLoading ? 'opacity-50 cursor-not-allowed' : ''
-                    }`}
-                  >
-                    {isLoading ? (
-                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
-                    ) : (
-                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                      </svg>
-                    )}
-                    {isLoading ? '刷新中...' : '刷新图库'}
-                  </button>
-                )}
-              </Menu.Item>
-            </div>
-          </Menu.Items>
+            </Menu.Items>
+          </Transition>
         </>
       )}
     </Menu>
   )
-} 
+}

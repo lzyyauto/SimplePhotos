@@ -10,7 +10,6 @@ from app.api.routes import router
 from app.config import settings
 from app.database import models
 from app.database.database import SessionLocal, engine, get_db
-from app.services.file_service import FileService
 from app.services.init_service import InitializationService
 from app.utils.logger import logger
 from fastapi import FastAPI
@@ -18,8 +17,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-# 全局服务实例
-file_service: Optional[FileService] = None
 
 # 创建数据库表
 logger.info("正在创建数据库表...")
@@ -31,7 +28,6 @@ logger.info("数据库表创建完成")
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
     db = SessionLocal()
-    file_service_instance: Optional[FileService] = None
 
     try:
         # 初始化数据库（首次启动时触发全盘扫描）
@@ -41,26 +37,15 @@ async def lifespan(app: FastAPI):
             logger.error("数据库初始化失败，应用无法启动")
             raise RuntimeError("数据库初始化失败")
 
-        # 初始化成功后，按配置决定是否启动文件监控
-        if settings.ENABLE_FILE_WATCHER:
-            file_service_instance = FileService(db)
-            file_service_instance.start_watching(str(settings.IMAGES_DIR))
-            logger.info("文件监控服务已启动")
-        else:
-            logger.info("文件监控服务已禁用（ENABLE_FILE_WATCHER=false）")
-
         yield
 
     except Exception as e:
         logger.error(f"应用启动失败: {str(e)}")
         raise
     finally:
-        # 应用关闭时，停止监控并关闭 DB Session
-        if file_service_instance:
-            file_service_instance.stop_watching()
+        # 应用关闭时关闭 DB Session
         db.close()
         logger.info("应用已停止")
-
 
 # 配置 uvicorn 访问日志
 logging_config = {

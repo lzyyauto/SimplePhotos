@@ -56,13 +56,18 @@ docker-compose.local.yml
 .env.*.local
 
 # Application Specific
-instance/           # Flask
-*.spec             # PyInstaller
-data/             # Data directory
+# Flask
+instance/
+# PyInstaller
+*.spec
+# Data directory
+data/
 
 # Operating System
-.DS_Store          # macOS
-Thumbs.db          # Windows
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
@@ -72,3 +77,6 @@ Thumbs.db          # Windows
 # Node.js
 node_modules/
 *.local
+
+# AI
+.agents/

@@ -85,14 +85,17 @@ class ImageService:
             self.db.rollback()
             return False
 
+    def _get_cache_path(self, file_info: FileInfo, base_dir: Path | str, suffix: str) -> str:
+        rel_dir = os.path.dirname(file_info.rel_path)
+        file_name = f"{Path(file_info.full_path).stem}_{uuid.uuid4().hex[:8]}{suffix}"
+        full_path = os.path.join(base_dir, rel_dir, file_name)
+        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+        return full_path
+
     async def _handle_heif_conversion(self, file_info: FileInfo) -> Optional[str]:
         """HEIC/HEIF → JPEG 转换，保持目录结构"""
         try:
-            rel_dir = os.path.dirname(file_info.rel_path)
-            file_name = f"{Path(file_info.full_path).stem}_{uuid.uuid4().hex[:8]}.jpg"
-            full_path = os.path.join(settings.CONVERTED_DIR, rel_dir, file_name)
-
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            full_path = self._get_cache_path(file_info, settings.CONVERTED_DIR, ".jpg")
             await self.processor.convert_heic(file_info.full_path, full_path)
             return full_path
         except Exception as e:
@@ -102,11 +105,7 @@ class ImageService:
     async def _handle_thumbnail_creation(self, file_info: FileInfo) -> Optional[str]:
         """生成缩略图，保持目录结构"""
         try:
-            rel_dir = os.path.dirname(file_info.rel_path)
-            file_name = f"{Path(file_info.full_path).stem}_{uuid.uuid4().hex[:8]}_thumb.jpg"
-            full_path = os.path.join(settings.THUMBNAIL_DIR, rel_dir, file_name)
-
-            os.makedirs(os.path.dirname(full_path), exist_ok=True)
+            full_path = self._get_cache_path(file_info, settings.THUMBNAIL_DIR, "_thumb.jpg")
             await self.processor.create_thumbnail(file_info.full_path, full_path)
             return full_path
         except Exception as e:

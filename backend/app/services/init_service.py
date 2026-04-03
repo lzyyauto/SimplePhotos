@@ -194,56 +194,18 @@ class InitializationService:
         """处理一组文件，每个 chunk 使用独立 Session，避免长事务"""
         success_count = 0
         failed_count = 0
-        # 每个 chunk 使用独立 Session，避免一个 chunk 失败影响其他 chunk
         session = self.Session()
 
         try:
             for idx, (file_path, folder_path) in enumerate(files, 1):
-                try:
-                    file_info = self.file_service.get_file_info(file_path)
-                    abs_folder_path = os.path.abspath(folder_path)
-
-                    with self.folder_lock:
-                        folder_id = self.folders_map.get(abs_folder_path)
-
-                    if not folder_id:
-                        error_msg = f"找不到文件夹ID: {abs_folder_path}"
-                        logger.warning(f"{error_msg} / {file_info.rel_path}")
-                        session.add(FailedImage(
-                            file_path=file_info.rel_path,
-                            folder_path=os.path.relpath(folder_path, settings.IMAGES_DIR),
-                            error_message=error_msg,
-                        ))
-                        failed_count += 1
-                        continue
-
-                    image_service = ImageService(session)
-                    if await image_service.process_image(file_info, folder_id):
-                        success_count += 1
-                        if success_count % 10 == 0:
-                            session.commit()
-                            logger.info(
-                                f"分片 {chunk_id}: 已处理 {success_count}/{len(files)} 个文件"
-                            )
-                    else:
-                        session.add(FailedImage(
-                            file_path=file_info.rel_path,
-                            folder_path=os.path.relpath(folder_path, settings.IMAGES_DIR),
-                            error_message="图片处理失败",
-                        ))
-                        failed_count += 1
-
-                except Exception as e:
-                    error_msg = f"处理文件异常: {str(e)}"
-                    logger.error(f"{error_msg} - {file_path}")
-                    session.add(FailedImage(
-                        file_path=os.path.relpath(file_path, settings.IMAGES_DIR),
-                        folder_path=os.path.relpath(folder_path, settings.IMAGES_DIR),
-                        error_message=error_msg,
-                    ))
+                if await self._process_one_file_in_chunk(session, file_path, folder_path):
+                    success_count += 1
+                    if success_count % 10 == 0:
+                        session.commit()
+                        logger.info(f"分片 {chunk_id}: 已处理 {success_count}/{len(files)} 个文件")
+                else:
                     failed_count += 1
 
-                # 每 10 个文件提交一次，控制事务大小
                 if idx % 10 == 0:
                     session.commit()
 
@@ -256,6 +218,45 @@ class InitializationService:
             return success_count, failed_count
         finally:
             session.close()
+
+    async def _process_one_file_in_chunk(
+        self, session: Session, file_path: str, folder_path: str
+    ) -> bool:
+        """抽取单个文件的处理逻辑，避免大段嵌套"""
+        try:
+            file_info = self.file_service.get_file_info(file_path)
+            abs_folder_path = os.path.abspath(folder_path)
+
+            with self.folder_lock:
+                folder_id = self.folders_map.get(abs_folder_path)
+
+            if not folder_id:
+                error_msg = f"找不到文件夹ID: {abs_folder_path}"
+                logger.warning(f"{error_msg} / {file_info.rel_path}")
+                self._record_failed_image(session, file_info.rel_path, folder_path, error_msg)
+                return False
+
+            image_service = ImageService(session)
+            if await image_service.process_image(file_info, folder_id):
+                return True
+            else:
+                self._record_failed_image(session, file_info.rel_path, folder_path, "图片处理失败")
+                return False
+
+        except Exception as e:
+            error_msg = f"处理文件异常: {str(e)}"
+            logger.error(f"{error_msg} - {file_path}")
+            rel_file_path = os.path.relpath(file_path, settings.IMAGES_DIR)
+            self._record_failed_image(session, rel_file_path, folder_path, error_msg)
+            return False
+
+    def _record_failed_image(self, session: Session, rel_file_path: str, folder_path: str, error_msg: str):
+        """记录失败图片"""
+        session.add(FailedImage(
+            file_path=rel_file_path,
+            folder_path=os.path.relpath(folder_path, settings.IMAGES_DIR),
+            error_message=error_msg,
+        ))
 
     async def process_single_file(
         self, file_info: FileInfo, folder_id: int, session: Session

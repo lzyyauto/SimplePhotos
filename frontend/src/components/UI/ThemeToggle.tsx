@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 
 export const ThemeToggle = () => {
   const [isDark, setIsDark] = useState(false);
@@ -18,28 +19,51 @@ export const ThemeToggle = () => {
   return (
     <button
       onClick={toggleTheme}
-      className="relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none
-                bg-gray-200 dark:bg-blue-600"
+      className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors duration-300 focus:outline-none shadow-inner
+        ${isDark ? 'bg-gray-800 border border-gray-700' : 'bg-gray-200 border border-gray-300'}`}
       role="switch"
       aria-checked={isDark}
+      aria-label="Toggle Theme"
     >
-      <span className="sr-only">切换主题</span>
-      <span
-        className={`${
-          isDark ? 'translate-x-6 bg-white' : 'translate-x-1 bg-white'
-        } inline-block h-4 w-4 transform rounded-full transition-transform duration-200 ease-in-out
-        flex items-center justify-center`}
+      <motion.div
+        className="absolute w-6 h-6 bg-white rounded-full shadow-sm flex items-center justify-center z-10 overflow-hidden"
+        initial={false}
+        animate={{
+          left: isDark ? '30px' : '4px',
+        }}
+        transition={{ type: 'spring', stiffness: 500, damping: 30 }}
       >
-        {isDark ? (
-          <svg className="w-3 h-3 text-blue-600" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
-          </svg>
-        ) : (
-          <svg className="w-3 h-3 text-yellow-400" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
-          </svg>
-        )}
-      </span>
+        <motion.svg
+          className="w-3.5 h-3.5 text-gray-800"
+          initial={false}
+          animate={{
+            rotate: isDark ? 0 : 90,
+            opacity: isDark ? 1 : 0,
+            scale: isDark ? 1 : 0.5,
+          }}
+          transition={{ duration: 0.2 }}
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          style={{ position: 'absolute' }}
+        >
+          <path d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+        </motion.svg>
+        <motion.svg
+          className="w-4 h-4 text-yellow-500"
+          initial={false}
+          animate={{
+            rotate: isDark ? -90 : 0,
+            opacity: isDark ? 0 : 1,
+            scale: isDark ? 0.5 : 1,
+          }}
+          transition={{ duration: 0.2 }}
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          style={{ position: 'absolute' }}
+        >
+          <path fillRule="evenodd" d="M12 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4.22 3.364a1 1 0 011.415 0l.707.707a1 1 0 01-1.414 1.414l-.707-.707a1 1 0 010-1.414zM21 11a1 1 0 110 2h-1a1 1 0 110-2h1zm-3.364 4.22a1 1 0 010 1.415l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 0zM12 18a1 1 0 110 2v1a1 1 0 11-2 0v-1a1 1 0 112 0zm-4.22-3.364a1 1 0 01-1.415 0l-.707-.707a1 1 0 011.414-1.414l.707.707a1 1 0 010 1.414zM5 11a1 1 0 010 2H4a1 1 0 010-2h1zm3.364-4.22a1 1 0 010-1.415l.707-.707a1 1 0 011.414 1.414l-.707.707a1 1 0 01-1.414 0zM12 6a6 6 0 100 12 6 6 0 000-12z" clipRule="evenodd" />
+        </motion.svg>
+      </motion.div>
     </button>
   );
-}; 
+};

@@ -18,27 +18,35 @@ export const ImageCard = ({ image, onClick }: ImageCardProps) => {
 
   return (
     <motion.div
-      className="image-card cursor-pointer relative"
-      whileHover={{ scale: 1.02 }}
+      className="relative cursor-pointer rounded-2xl overflow-hidden group shadow-sm bg-gray-100 dark:bg-gray-800 border border-black/5 dark:border-white/5"
+      whileHover={{ scale: 1.01, y: -2 }}
+      whileTap={{ scale: 0.98 }}
       onClick={() => onClick?.(image)}
+      layout
     >
       {isLoading && (
-        <div className="absolute inset-0 loading-skeleton" />
+        <div className="absolute inset-0 animate-pulse bg-gray-200 dark:bg-gray-700" />
       )}
-      <img
-        src={previewUrl}
-        alt=""
-        className={`w-full h-full object-cover transition-opacity duration-300 ${
-          isLoading ? 'opacity-0' : 'opacity-100'
-        }`}
-        onLoad={() => setIsLoading(false)}
-      />
+      <div className="aspect-square w-full">
+        <img
+          src={previewUrl}
+          alt=""
+          className={`w-full h-full object-cover transition-all duration-500 ease-in-out ${
+            isLoading ? 'opacity-0 scale-105' : 'opacity-100 scale-100 group-hover:scale-105'
+          }`}
+          onLoad={() => setIsLoading(false)}
+          loading="lazy"
+        />
+      </div>
       
+      {/* 渐变遮罩用于 hover */}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none" />
+
       {(isVideo || isGif) && (
-        <div className="absolute bottom-2 right-2 bg-black/50 rounded-full p-2 text-white">
-          {isVideo ? <FaPlay size={12} /> : <FaGift size={12} />}
+        <div className="absolute top-3 right-3 bg-black/30 backdrop-blur-md rounded-xl p-2 text-white shadow-sm border border-white/20">
+          {isVideo ? <FaPlay size={12} className="opacity-90" /> : <FaGift size={12} className="opacity-90" />}
         </div>
       )}
     </motion.div>
   );
-}; 
+};

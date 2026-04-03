@@ -108,7 +108,7 @@ class FolderService:
                 new_folders = real_folders - db_folders
                 deleted_folders = db_folders - real_folders
 
-                has_changes = any([new_files, deleted_files, new_folders, deleted_folders])
+                has_changes = new_files or deleted_files or new_folders or deleted_folders
 
                 if has_changes:
                     logger.info(
@@ -279,5 +279,6 @@ class FolderService:
             self.db.rollback()
             logger.error(f"删除文件夹记录失败 {rel_path}: {str(e)}")
 
-    def _is_supported_file(self, filename: str) -> bool:
+    @staticmethod
+    def _is_supported_file(filename: str) -> bool:
         return any(filename.lower().endswith(ext) for ext in settings.SUPPORTED_FORMATS)
