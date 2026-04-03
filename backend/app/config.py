@@ -23,19 +23,23 @@ class Settings(BaseSettings):
     LOGS_DIR: Path = DATA_DIR / "logs"
 
     # 数据库配置
-    DB_TYPE: str = os.getenv('DB_TYPE', 'sqlite')  # 默认使用 sqlite
+    DB_TYPE: str = os.getenv('DB_TYPE', 'sqlite')  # sqlite / postgresql
 
-    # MySQL 配置
-    MYSQL_HOST: str = os.getenv('MYSQL_HOST', 'localhost')
-    MYSQL_PORT: int = int(os.getenv('MYSQL_PORT', 3306))
-    MYSQL_USER: str = os.getenv('MYSQL_USER', 'root')
-    MYSQL_PASSWORD: str = os.getenv('MYSQL_PASSWORD', '')
-    MYSQL_DATABASE: str = os.getenv('MYSQL_DATABASE', 'photos')
+    # PostgreSQL 配置
+    PG_HOST: str = os.getenv('PG_HOST', 'localhost')
+    PG_PORT: int = int(os.getenv('PG_PORT', 5432))
+    PG_USER: str = os.getenv('PG_USER', 'postgres')
+    PG_PASSWORD: str = os.getenv('PG_PASSWORD', '')
+    PG_DATABASE: str = os.getenv('PG_DATABASE', 'simplephotos')
 
     @property
     def DATABASE_URL(self) -> str:
-        if self.DB_TYPE == 'mysql':
-            return f"mysql+pymysql://{self.MYSQL_USER}:{self.MYSQL_PASSWORD}@{self.MYSQL_HOST}:{self.MYSQL_PORT}/{self.MYSQL_DATABASE}"
+        if self.DB_TYPE == 'postgresql':
+            return (
+                f"postgresql+psycopg2://"
+                f"{self.PG_USER}:{self.PG_PASSWORD}"
+                f"@{self.PG_HOST}:{self.PG_PORT}/{self.PG_DATABASE}"
+            )
         return f"sqlite:///{self.DATA_DIR}/images.db"
 
     # 图片相关配置
@@ -64,15 +68,16 @@ class Settings(BaseSettings):
 
     def __init__(self):
         super().__init__()
-        # 打印关键配置信息
         print(f"数据库配置:")
         print(f"  DB_TYPE: {self.DB_TYPE}")
-        if self.DB_TYPE == 'mysql':
-            print(f"  MYSQL_HOST: {self.MYSQL_HOST}")
-            print(f"  MYSQL_PORT: {self.MYSQL_PORT}")
-            print(f"  MYSQL_USER: {self.MYSQL_USER}")
-            print(f"  MYSQL_DATABASE: {self.MYSQL_DATABASE}")
-            print(f"  DATABASE_URL: {self.DATABASE_URL}")
+        if self.DB_TYPE == 'postgresql':
+            print(f"  PG_HOST: {self.PG_HOST}")
+            print(f"  PG_PORT: {self.PG_PORT}")
+            print(f"  PG_USER: {self.PG_USER}")
+            print(f"  PG_DATABASE: {self.PG_DATABASE}")
+            # 密码不输出，只显示是否已设置
+            print(f"  PG_PASSWORD: {'***' if self.PG_PASSWORD else '(empty)'}")
+        print(f"  DATABASE_URL: {self.DATABASE_URL}")
 
         print(f"\n路径配置:")
         print(f"  BASE_DIR: {self.BASE_DIR}")

@@ -1,7 +1,8 @@
 fastapi==0.104.1
 uvicorn==0.24.0
 sqlalchemy==2.0.23
-pymysql==1.1.0
+# PostgreSQL 驱动（替换 pymysql）
+psycopg2-binary==2.9.11
 pillow==10.1.0
 pillow-heif==0.15.0
 pyheif==0.7.1

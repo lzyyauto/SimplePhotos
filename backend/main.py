@@ -1,6 +1,8 @@
 import contextlib
+import os
 import signal
 import sys
+from pathlib import Path
 from typing import Optional
 
 import uvicorn
@@ -13,6 +15,7 @@ from app.services.init_service import InitializationService
 from app.utils.logger import logger
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 # 全局服务实例
@@ -27,36 +30,36 @@ logger.info("数据库表创建完成")
 @contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     """应用生命周期管理"""
+    db = SessionLocal()
+    file_service_instance: Optional[FileService] = None
+
     try:
-        # 创建数据库会话
-        db = SessionLocal()
-
-        try:
-            # 初始化服务
-            init_service = InitializationService(db)
-            if not await init_service.initialize_database():
-                logger.error("数据库初始化失败")
-                raise RuntimeError("数据库初始化失败")
-
-        except Exception as e:
-            logger.error(f"初始化服务失败: {str(e)}")
-            raise
-
-        finally:
-            # 根据配置决定是否启动文件监控
-            if settings.ENABLE_FILE_WATCHER:
-                file_service = FileService(db)
-                file_service.start_watching(settings.IMAGES_DIR)
-                logger.info("文件监控服务已启动")
-            else:
-                logger.info("文件监控服务已禁用")
+        # 初始化数据库（首次启动时触发全盘扫描）
+        init_service = InitializationService(db)
+        if not await init_service.initialize_database():
             db.close()
+            logger.error("数据库初始化失败，应用无法启动")
+            raise RuntimeError("数据库初始化失败")
+
+        # 初始化成功后，按配置决定是否启动文件监控
+        if settings.ENABLE_FILE_WATCHER:
+            file_service_instance = FileService(db)
+            file_service_instance.start_watching(str(settings.IMAGES_DIR))
+            logger.info("文件监控服务已启动")
+        else:
+            logger.info("文件监控服务已禁用（ENABLE_FILE_WATCHER=false）")
 
         yield
 
     except Exception as e:
         logger.error(f"应用启动失败: {str(e)}")
-        raise e
+        raise
+    finally:
+        # 应用关闭时，停止监控并关闭 DB Session
+        if file_service_instance:
+            file_service_instance.stop_watching()
+        db.close()
+        logger.info("应用已停止")
 
 
 # 配置 uvicorn 访问日志
@@ -97,7 +100,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 挂载静态文件目录
+# 注册 API 路由（必须在静态文件挂载之前，否则 catch-all 会拦截 API 请求）
+app.include_router(router, prefix="/api")
+
+# 挂载媒体静态文件目录
 app.mount("/data/images",
           StaticFiles(directory=str(settings.IMAGES_DIR)),
           name="images")
@@ -108,8 +114,28 @@ app.mount("/data/converted",
           StaticFiles(directory=str(settings.CONVERTED_DIR)),
           name="converted")
 
-# 注册路由
-app.include_router(router, prefix="/api")
+# -------------------------------------------------------------------
+# 前端静态文件托管（生产环境）
+# 优先查找 Vite build 产物（dist/），找不到则认为是开发模式，跳过
+# -------------------------------------------------------------------
+_FRONTEND_DIST = Path(__file__).parent / "frontend" / "dist"
+
+if _FRONTEND_DIST.exists():
+    # 挂载前端 assets（JS/CSS/图片等）
+    app.mount("/assets",
+              StaticFiles(directory=str(_FRONTEND_DIST / "assets")),
+              name="frontend-assets")
+
+    # SPA catch-all：所有非 API、非静态资源的路径都返回 index.html
+    # 让前端 React Router 处理路由
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str):
+        index = _FRONTEND_DIST / "index.html"
+        return FileResponse(str(index))
+
+    logger.info(f"前端静态文件已挂载: {_FRONTEND_DIST}")
+else:
+    logger.info("未找到前端 dist 目录，跳过静态文件挂载（开发模式）")
 
 if __name__ == "__main__":
     logger.info("正在启动应用服务器...")

@@ -2,7 +2,7 @@ services:
   simplephotos:
     image: lzyyauto/simplephotos:latest
     ports:
-      - "5173:5173"
+      - "8000:8000"
     volumes:
       - /Users/zingliu/Code/SimplePhotos/data:/app/data
       - /Volumes/Pic:/app/data/images
@@ -12,15 +12,16 @@ services:
       - LC_ALL=zh_CN.UTF-8
       - DATA_ROOT=/app/data
       - IMAGES_DIR=/app/data/images
-      - ENABLE_FILE_WATCHER=true  # 启用文件监控
-      - SCAN_WORKERS=4       # 最大线程数，建议设置为 CPU 核心数的 2-4 倍
-      - SCAN_CHUNK_SIZE=20    # 每个分片的文件数，可以根据文件大小调整
-      - DB_TYPE=mysql         # 不填写mysql相关就是默认sqlite
-      - MYSQL_HOST=localhost
-      - MYSQL_PORT=3306
-      - MYSQL_USER=root
-      - MYSQL_PASSWORD=
-      - MYSQL_DATABASE=simplephotos
+      - ENABLE_FILE_WATCHER=false     # Docker(NAS) 部署下推荐禁用文件监控
+      - SCAN_WORKERS=4                # 扫描线程数，建议设置为 CPU 核心数的 2-4 倍
+      - SCAN_CHUNK_SIZE=20            # 每个分片的文件数
+      # 数据库配置：使用 postgresql（或注释掉改用默认 sqlite）
+      - DB_TYPE=postgresql
+      - PG_HOST=localhost
+      - PG_PORT=5432
+      - PG_USER=postgres
+      - PG_PASSWORD=
+      - PG_DATABASE=simplephotos
     deploy:
       resources:
         limits:

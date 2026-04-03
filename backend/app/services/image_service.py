@@ -1,4 +1,3 @@
-# type: ignore[import]
 import mimetypes
 import os
 import uuid
@@ -7,11 +6,9 @@ from typing import Optional
 
 from app.config import settings
 from app.database.models import Image
-from app.models import FileInfo, Image
+from app.models import FileInfo
 from app.utils.image_utils import ImageProcessor
 from app.utils.logger import logger
-from PIL import Image as PILImage
-from pillow_heif import register_heif_opener
 from sqlalchemy.orm import Session
 
 
@@ -27,47 +24,60 @@ class ImageService:
         os.makedirs(settings.THUMBNAIL_DIR, exist_ok=True)
         os.makedirs(settings.CONVERTED_DIR, exist_ok=True)
 
+    async def get_image(self, image_id: int) -> Optional[Image]:
+        """根据 ID 获取图片记录"""
+        return self.db.query(Image).filter(Image.id == image_id).first()
+
     async def process_image(self, file_info: FileInfo, folder_id: int) -> bool:
-        """处理单个图片文件"""
+        """处理单个图片/视频文件，生成缩略图和 HEIC 转换文件"""
         try:
-            # 检查文件是否已存在
+            # 幂等：文件已存在则跳过（使用相对路径去重）
             existing = self.db.query(Image).filter(
-                Image.file_path == file_info.full_path).first()
+                Image.file_path == file_info.rel_path
+            ).first()
             if existing:
                 return True
 
-            # 创建图片记录
-            image = Image(folder_id=folder_id,
-                          file_path=file_info.full_path,
-                          mime_type=file_info.mime_type,
-                          image_type=self._get_image_type(file_info.full_path),
-                          created_at=file_info.created_at,
-                          exif_data=self.processor.get_exif_data(
-                              file_info.full_path))
+            is_heic = file_info.full_path.lower().endswith((".heic", ".heif"))
+
+            image = Image(
+                folder_id=folder_id,
+                file_path=file_info.rel_path,  # 存相对路径，跨部署可移植
+                mime_type=file_info.mime_type,
+                image_type=self._get_image_type(file_info.full_path),
+                is_heic=is_heic,  # 正确设置 is_heic 字段
+                created_at=file_info.created_at,
+                exif_data=self.processor.get_exif_data(file_info.full_path),
+            )
 
             self.db.add(image)
-            self.db.flush()
+            self.db.flush()  # 获取 image.id，不提交事务
 
-            # 处理图片文件
-            if file_info.mime_type and (
-                    file_info.mime_type.startswith('image/')
-                    or file_info.mime_type.startswith('video/')):
-                # 处理HEIF/HEIC文件
-                if file_info.full_path.lower().endswith(('.heic', '.heif')):
-                    converted_path = await self._handle_heif_conversion(
-                        file_info, image)
+            is_media = file_info.mime_type and (
+                file_info.mime_type.startswith("image/")
+                or file_info.mime_type.startswith("video/")
+            )
+
+            if is_media:
+                # HEIC 转换为 JPEG
+                if is_heic:
+                    converted_path = await self._handle_heif_conversion(file_info)
                     if converted_path:
-                        image.converted_path = converted_path
+                        # 存相对于 CONVERTED_DIR 的路径
+                        image.converted_path = os.path.relpath(
+                            converted_path, settings.CONVERTED_DIR
+                        )
 
                 # 生成缩略图
-                thumb_path = await self._handle_thumbnail_creation(
-                    file_info, image)
+                thumb_path = await self._handle_thumbnail_creation(file_info)
                 if thumb_path:
-                    image.thumbnail_path = thumb_path
+                    # 存相对于 THUMBNAIL_DIR 的路径
+                    image.thumbnail_path = os.path.relpath(
+                        thumb_path, settings.THUMBNAIL_DIR
+                    )
 
-                self.db.refresh(image)
-                self.db.commit()
-
+            # flush 更新缩略图路径，由外层 chunk 来 commit，避免双重提交
+            self.db.flush()
             return True
 
         except Exception as e:
@@ -75,64 +85,43 @@ class ImageService:
             self.db.rollback()
             return False
 
-    async def _handle_heif_conversion(self, file_info: FileInfo,
-                                      image: Image) -> Optional[str]:
-        """处理HEIF/HEIC转换"""
+    async def _handle_heif_conversion(self, file_info: FileInfo) -> Optional[str]:
+        """HEIC/HEIF → JPEG 转换，保持目录结构"""
         try:
-            # 保持原始目录结构
             rel_dir = os.path.dirname(file_info.rel_path)
             file_name = f"{Path(file_info.full_path).stem}_{uuid.uuid4().hex[:8]}.jpg"
-            rel_path = os.path.join(rel_dir, file_name)
-            full_path = os.path.join(settings.CONVERTED_DIR, rel_path)
+            full_path = os.path.join(settings.CONVERTED_DIR, rel_dir, file_name)
 
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
             await self.processor.convert_heic(file_info.full_path, full_path)
-
-            # 保存完整路径
-            image.converted_path = full_path  # 使用完整路径
-            self.db.add(image)
-            self.db.flush()
-
             return full_path
         except Exception as e:
             logger.error(f"HEIF转换失败 {file_info.rel_path}: {str(e)}")
             return None
 
-    async def _handle_thumbnail_creation(self, file_info: FileInfo,
-                                         image: Image) -> Optional[str]:
-        """处理缩略图生成"""
+    async def _handle_thumbnail_creation(self, file_info: FileInfo) -> Optional[str]:
+        """生成缩略图，保持目录结构"""
         try:
             rel_dir = os.path.dirname(file_info.rel_path)
             file_name = f"{Path(file_info.full_path).stem}_{uuid.uuid4().hex[:8]}_thumb.jpg"
-            rel_path = os.path.join(rel_dir, file_name)
-            full_path = os.path.join(settings.THUMBNAIL_DIR, rel_path)
+            full_path = os.path.join(settings.THUMBNAIL_DIR, rel_dir, file_name)
 
             os.makedirs(os.path.dirname(full_path), exist_ok=True)
-            await self.processor.create_thumbnail(file_info.full_path,
-                                                  full_path)
-
-            # 保存完整路径并更新数据库
-            image.thumbnail_path = full_path
-            self.db.add(image)
-            self.db.flush()
-
+            await self.processor.create_thumbnail(file_info.full_path, full_path)
             return full_path
         except Exception as e:
             logger.error(f"缩略图生成失败 {file_info.rel_path}: {str(e)}")
             return None
 
     def _get_image_type(self, file_path: str) -> str:
-        """获取图片类型"""
+        """根据扩展名判断文件类型"""
         ext = os.path.splitext(file_path)[1].lower()
-        if ext in ('.jpg', '.jpeg'):
-            return 'jpeg'
-        elif ext == '.png':
-            return 'png'
-        elif ext == '.gif':
-            return 'gif'
-        elif ext in ('.heic', '.heif'):
-            return 'heif'
-        elif ext in ('.mp4', '.mov'):
-            return 'video'
-        else:
-            return 'unknown'
+        type_map = {
+            ".jpg": "jpeg", ".jpeg": "jpeg",
+            ".png": "png",
+            ".gif": "gif",
+            ".webp": "webp",
+            ".heic": "heif", ".heif": "heif",
+            ".mp4": "video", ".mov": "video",
+        }
+        return type_map.get(ext, "unknown")

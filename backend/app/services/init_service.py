@@ -4,9 +4,9 @@ import threading
 from typing import Any, Dict, List, Tuple
 
 from app.config import settings
-from app.database.database import engine  # 确保导入 engine
-from app.models import Folder, Image  # 从 app.models 导入
-from app.models import Base, FailedImage, FileInfo, FolderInfo
+from app.database.database import engine
+from app.database.models import Base, FailedImage, Folder, Image
+from app.models import FileInfo, FolderInfo
 from app.services.file_service import FileService
 from app.services.image_service import ImageService
 from app.utils.logger import logger
@@ -26,13 +26,11 @@ class InitializationService:
         self.folder_lock = threading.Lock()
 
     async def initialize_database(self) -> bool:
-        """数据库初始化入口"""
+        """数据库初始化入口：若已有数据则跳过扫描"""
         try:
             logger.info("开始检查数据库初始化状态...")
 
-            # 确保数据库连接正常
             try:
-                # 检查数据库表是否存在
                 Base.metadata.create_all(bind=engine)
                 logger.info("数据库表创建完成")
 
@@ -47,29 +45,18 @@ class InitializationService:
                 logger.error(f"数据库查询失败: {str(e)}", exc_info=True)
                 raise RuntimeError(f"数据库连接异常: {str(e)}")
 
-            # 检查图片目录是否存在
             if not os.path.exists(settings.IMAGES_DIR):
                 logger.error(f"图片目录不存在: {settings.IMAGES_DIR}")
                 return False
 
             logger.info(f"开始扫描图片目录: {settings.IMAGES_DIR}")
 
-            # 第一阶段：处理文件夹
-            try:
-                if not await self.process_folders():
-                    logger.error("文件夹处理失败")
-                    return False
-            except Exception as e:
-                logger.error(f"文件夹处理异常: {str(e)}", exc_info=True)
+            if not await self.process_folders():
+                logger.error("文件夹处理失败")
                 return False
 
-            # 第二阶段：处理文件
-            try:
-                if not await self.process_files():
-                    logger.error("文件处理失败")
-                    return False
-            except Exception as e:
-                logger.error(f"文件处理异常: {str(e)}", exc_info=True)
+            if not await self.process_files():
+                logger.error("文件处理失败")
                 return False
 
             logger.info("数据库初始化完成")
@@ -82,47 +69,25 @@ class InitializationService:
     async def full_scan(self) -> Tuple[bool, str]:
         """执行全盘扫描，强制重新扫描所有文件夹和文件
         Returns:
-            Tuple[bool, str]: (是否成功, 错误信息)
+            Tuple[bool, str]: (是否成功, 结果信息)
         """
         try:
             logger.info("开始执行全盘扫描...")
-
-            # 确保数据库表存在
             Base.metadata.create_all(bind=engine)
-            logger.info("确认数据库表结构完整")
 
-            # 检查图片目录是否存在
             if not os.path.exists(settings.IMAGES_DIR):
                 error_msg = f"图片目录不存在: {settings.IMAGES_DIR}"
                 logger.error(error_msg)
                 return False, error_msg
 
             logger.info(f"开始全盘扫描图片目录: {settings.IMAGES_DIR}")
-
-            # 清空文件夹映射表
             self.folders_map = {}
 
-            # 第一阶段：处理文件夹
-            try:
-                if not await self.process_folders(force_rescan=True):
-                    error_msg = "文件夹处理失败"
-                    logger.error(error_msg)
-                    return False, error_msg
-            except Exception as e:
-                error_msg = f"文件夹处理异常: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                return False, error_msg
+            if not await self.process_folders(force_rescan=True):
+                return False, "文件夹处理失败"
 
-            # 第二阶段：处理文件
-            try:
-                if not await self.process_files(force_rescan=True):
-                    error_msg = "文件处理失败"
-                    logger.error(error_msg)
-                    return False, error_msg
-            except Exception as e:
-                error_msg = f"文件处理异常: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                return False, error_msg
+            if not await self.process_files(force_rescan=True):
+                return False, "文件处理失败"
 
             logger.info("全盘扫描完成")
             return True, "扫描完成"
@@ -137,28 +102,24 @@ class InitializationService:
         try:
             logger.info("开始处理文件夹...")
 
-            # 如果是强制重新扫描，先清空文件夹表
             if force_rescan:
                 with self.Session() as session:
                     try:
-                        # 先删除 Image 表中的所有记录，因为它引用了 folders 表
-                        session.query(Image).delete()
-                        
-                        # 删除 FailedImage 表中的记录
-                        session.query(FailedImage).delete()
-                        
-                        # 使用 SQL 直接删除 folders 表中的记录，禁用外键约束检查
-                        # 对于 MySQL
-                        if settings.DB_TYPE == 'mysql':
-                            session.execute(text("SET FOREIGN_KEY_CHECKS=0"))
-                            session.execute(text("TRUNCATE TABLE folders"))
-                            session.execute(text("SET FOREIGN_KEY_CHECKS=1"))
-                        # 对于 SQLite
+                        if settings.DB_TYPE == "postgresql":
+                            # PostgreSQL：一条语句完成，RESTART IDENTITY 重置自增序列
+                            # CASCADE 自动处理外键依赖（images, failed_images）
+                            session.execute(text(
+                                "TRUNCATE TABLE images, failed_images, folders "
+                                "RESTART IDENTITY CASCADE"
+                            ))
                         else:
+                            # SQLite：临时关闭外键约束，逐表清空
                             session.execute(text("PRAGMA foreign_keys=OFF"))
+                            session.execute(text("DELETE FROM images"))
+                            session.execute(text("DELETE FROM failed_images"))
                             session.execute(text("DELETE FROM folders"))
                             session.execute(text("PRAGMA foreign_keys=ON"))
-                        
+
                         session.commit()
                         logger.info("已清空相关表，准备重新扫描")
                     except Exception as e:
@@ -166,59 +127,49 @@ class InitializationService:
                         logger.error(f"清空表失败: {str(e)}")
                         return False
 
-            # 先创建根目录
             with self.Session() as session:
                 root = session.query(Folder).filter(
                     Folder.folder_path == ".").first()
                 if not root:
-                    root_info = FolderInfo(full_path=settings.IMAGES_DIR,
-                                          rel_path=".",
-                                          name="root",
-                                          parent_path=0)
+                    root_info = FolderInfo(
+                        full_path=str(settings.IMAGES_DIR),
+                        rel_path=".",
+                        name="root",
+                        parent_path=None,
+                    )
                     root = self.file_service.save_folder(root_info, session)
                     session.commit()
                     logger.info("创建根目录成功")
 
-                # 保存根目录ID到映射表 - 同时保存绝对路径和相对路径
-                self.folders_map["."] = root.id  # 使用相对路径 "."
-                self.folders_map[str(settings.IMAGES_DIR)] = root.id  # 使用绝对路径
+                # 映射表：使用相对路径 "." 和绝对路径两种 key，方便后续文件查找
+                self.folders_map["."] = root.id
+                self.folders_map[str(settings.IMAGES_DIR)] = root.id
 
-                # 处理其他文件夹
                 all_folders, _ = self.file_service.collect_paths()
                 for folder_path in all_folders:
-                    folder_info = self.file_service.get_folder_info(
-                        folder_path)
-                    folder = self.file_service.save_folder(
-                        folder_info, session)
+                    folder_info = self.file_service.get_folder_info(folder_path)
+                    folder = self.file_service.save_folder(folder_info, session)
                     if folder:
-                        # 使用绝对路径作为key
-                        self.folders_map[os.path.abspath(
-                            folder_path)] = folder.id
+                        self.folders_map[os.path.abspath(folder_path)] = folder.id
 
                 session.commit()
-                logger.info(f"文件夹处理完成，映射表: {self.folders_map}")
+                logger.info(f"文件夹处理完成，共处理 {len(self.folders_map)} 个文件夹")
 
             return True
 
         except Exception as e:
-            logger.error(f"处理文件夹失败: {str(e)}")
+            logger.error(f"处理文件夹失败: {str(e)}", exc_info=True)
             return False
 
     async def process_files(self, force_rescan: bool = False) -> bool:
-        """处理文件"""
+        """处理文件（分片 + 并发）"""
         try:
             logger.info("开始处理文件...")
-            
-            # 如果是强制重新扫描，先清空相关表
-            # 注意：现在我们在 process_folders 中已经清空了所有相关表
-            # 这里不再需要重复清空操作
-            
             _, all_files = self.file_service.collect_paths()
 
-            # 分片处理
-            chunk_size = 100
+            chunk_size = settings.SCAN_CHUNK_SIZE
             file_chunks = [
-                all_files[i:i + chunk_size]
+                all_files[i: i + chunk_size]
                 for i in range(0, len(all_files), chunk_size)
             ]
 
@@ -231,18 +182,19 @@ class InitializationService:
             completed = sum(s for s, f in results)
             failed = sum(f for s, f in results)
             logger.info(f"文件处理完成: 成功 {completed}, 失败 {failed}")
-
             return True
+
         except Exception as e:
-            logger.error(f"处理文件失败: {str(e)}")
+            logger.error(f"处理文件失败: {str(e)}", exc_info=True)
             return False
 
     async def _process_files_chunk(
-            self, chunk_id: int, files: List[Tuple[str,
-                                                   str]]) -> Tuple[int, int]:
-        """处理一组文件"""
+        self, chunk_id: int, files: List[Tuple[str, str]]
+    ) -> Tuple[int, int]:
+        """处理一组文件，每个 chunk 使用独立 Session，避免长事务"""
         success_count = 0
         failed_count = 0
+        # 每个 chunk 使用独立 Session，避免一个 chunk 失败影响其他 chunk
         session = self.Session()
 
         try:
@@ -256,16 +208,15 @@ class InitializationService:
 
                     if not folder_id:
                         error_msg = f"找不到文件夹ID: {abs_folder_path}"
-                        logger.warning(f"{error_msg} / {file_info}")
-                        # 记录失败信息
-                        failed_image = FailedImage(file_path=file_path,
-                                                   folder_path=folder_path,
-                                                   error_message=error_msg)
-                        session.add(failed_image)
+                        logger.warning(f"{error_msg} / {file_info.rel_path}")
+                        session.add(FailedImage(
+                            file_path=file_info.rel_path,
+                            folder_path=os.path.relpath(folder_path, settings.IMAGES_DIR),
+                            error_message=error_msg,
+                        ))
                         failed_count += 1
                         continue
 
-                    # 创建新的 ImageService 实例并处理图片
                     image_service = ImageService(session)
                     if await image_service.process_image(file_info, folder_id):
                         success_count += 1
@@ -275,35 +226,40 @@ class InitializationService:
                                 f"分片 {chunk_id}: 已处理 {success_count}/{len(files)} 个文件"
                             )
                     else:
-                        # 处理失败，记录到失败表
-                        failed_image = FailedImage(file_path=file_path,
-                                                   folder_path=folder_path,
-                                                   error_message="图片处理失败")
-                        session.add(failed_image)
+                        session.add(FailedImage(
+                            file_path=file_info.rel_path,
+                            folder_path=os.path.relpath(folder_path, settings.IMAGES_DIR),
+                            error_message="图片处理失败",
+                        ))
                         failed_count += 1
 
                 except Exception as e:
-                    error_msg = f"处理文件失败: {str(e)}"
+                    error_msg = f"处理文件异常: {str(e)}"
                     logger.error(f"{error_msg} - {file_path}")
-                    # 记录异常信息
-                    failed_image = FailedImage(file_path=file_path,
-                                               folder_path=folder_path,
-                                               error_message=error_msg)
-                    session.add(failed_image)
+                    session.add(FailedImage(
+                        file_path=os.path.relpath(file_path, settings.IMAGES_DIR),
+                        folder_path=os.path.relpath(folder_path, settings.IMAGES_DIR),
+                        error_message=error_msg,
+                    ))
                     failed_count += 1
 
-                # 定期提交以避免事务过大
-                if (idx % 10) == 0:
+                # 每 10 个文件提交一次，控制事务大小
+                if idx % 10 == 0:
                     session.commit()
 
             session.commit()
             return success_count, failed_count
 
+        except Exception as e:
+            logger.error(f"分片 {chunk_id} 处理失败: {str(e)}", exc_info=True)
+            session.rollback()
+            return success_count, failed_count
         finally:
             session.close()
 
-    async def process_single_file(self, file_info: FileInfo, folder_id: int,
-                                  session: Session) -> bool:
+    async def process_single_file(
+        self, file_info: FileInfo, folder_id: int, session: Session
+    ) -> bool:
         """处理单个文件"""
         try:
             image_service = ImageService(session)
