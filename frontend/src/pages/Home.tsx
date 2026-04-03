@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
+import { useInfiniteQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api } from '@/services/api';
-import { Folder, Image } from '@/types';
+import { Image } from '@/types';
 import { FolderGrid } from '@/components/Gallery/FolderGrid';
 import { ImageGrid } from '@/components/Gallery/ImageGrid';
 import { ImageViewer } from '@/components/Gallery/ImageViewer';
@@ -123,7 +123,14 @@ export const Home = () => {
           image={selectedImage}
           images={allImages}
           onClose={() => setSelectedImage(null)}
-          onNavigate={(image) => setSelectedImage(image)}
+          onNavigate={(direction) => {
+            const currentIndex = allImages.findIndex(img => img.id === selectedImage?.id);
+            if (direction === 'prev' && currentIndex > 0) {
+              setSelectedImage(allImages[currentIndex - 1]);
+            } else if (direction === 'next' && currentIndex < allImages.length - 1) {
+              setSelectedImage(allImages[currentIndex + 1]);
+            }
+          }}
         />
       </div>
     </div>

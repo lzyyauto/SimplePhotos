@@ -110,7 +110,7 @@ export const SettingsMenu = () => {
 
   return (
     <Menu>
-      {({ open }) => (
+      {() => (
         <>
           <Menu.Button className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800">
             {isLoading ? (

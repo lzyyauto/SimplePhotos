@@ -4,6 +4,7 @@ export interface Image {
   is_heic: boolean;
   is_thumbnail: boolean;
   image_type: string;
+  mime_type?: string;
   file_path: string;
   thumbnail_path: string;
   converted_path: string | null;

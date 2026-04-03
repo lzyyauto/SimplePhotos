@@ -66,7 +66,6 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
   const swipeHandlers = useSwipeable({
     onSwipedLeft: () => !isZoomed && hasNext && handleNavigate('next'),
     onSwipedRight: () => !isZoomed && hasPrev && handleNavigate('prev'),
-    preventDefaultTouchmoveEvent: true,
     trackMouse: false
   });
 
@@ -139,7 +138,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
                 {formatExifData(image.exif_data).map(({ label, value }) => (
                   <div key={label} className="flex justify-between">
                     <span className="text-white/70">{label}:</span>
-                    <span>{value}</span>
+                    <span>{String(value)}</span>
                   </div>
                 ))}
               </div>
@@ -192,8 +191,8 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
               initialScale={1}
               minScale={0.5}
               maxScale={4}
-              onZoomChange={({ state }) => {
-                setIsZoomed(state.scale !== 1);
+              onTransformed={(ref: any) => {
+                setIsZoomed(ref.state.scale !== 1);
               }}
               doubleClick={{
                 mode: "reset"
