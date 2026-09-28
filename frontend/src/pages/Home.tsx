@@ -31,6 +31,7 @@ export const Home = () => {
     getNextPageParam: (lastPage) => 
       lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined,
     initialPageParam: 1,
+    refetchInterval: 5 * 60 * 1000,
   });
 
   // 图片查询
@@ -49,6 +50,11 @@ export const Home = () => {
     getNextPageParam: (lastPage) => 
       lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined,
     initialPageParam: 1,
+    refetchInterval: (query) => {
+      const images: Image[] = query.state.data?.pages?.flatMap(page => page.items || []) ?? [];
+      if (images.some(image => image.thumbnail_status === 'pending' || image.thumbnail_status === 'processing')) return 2000;
+      return images.some(image => image.thumbnail_retryable) ? 15000 : 5 * 60 * 1000;
+    },
   });
 
   // 监听滚动加载
@@ -67,13 +73,13 @@ export const Home = () => {
     if (foldersEndVisible && hasMoreFolders && !isFetchingFolders) {
       fetchNextFolders();
     }
-  }, [foldersEndVisible, hasMoreFolders, isFetchingFolders]);
+  }, [foldersEndVisible, hasMoreFolders, isFetchingFolders, fetchNextFolders]);
 
   useEffect(() => {
     if (imagesEndVisible && hasMoreImages && !isFetchingImages) {
       fetchNextImages();
     }
-  }, [imagesEndVisible, hasMoreImages, isFetchingImages]);
+  }, [imagesEndVisible, hasMoreImages, isFetchingImages, fetchNextImages]);
 
   // 合并数据
   const allFolders = foldersData?.pages?.flatMap(page => page?.items || []) ?? [];
@@ -88,6 +94,11 @@ export const Home = () => {
         {(isFoldersLoading || isImagesLoading) && (
           <div className="flex justify-center">
             <Spinner />
+          </div>
+        )}
+        {(foldersData?.pages[0]?.scan_error || imagesData?.pages[0]?.scan_error) && (
+          <div className="mb-6 text-sm text-amber-700 dark:text-amber-300">
+            {foldersData?.pages[0]?.scan_error || imagesData?.pages[0]?.scan_error}
           </div>
         )}
         
@@ -126,7 +137,7 @@ export const Home = () => {
 
         {/* 图片查看器 */}
         <ImageViewer
-          image={selectedImage}
+          image={allImages.find(image => image.id === selectedImage?.id) ?? selectedImage}
           images={allImages}
           onClose={() => setSelectedImage(null)}
           onNavigate={(direction) => {
@@ -141,4 +152,4 @@ export const Home = () => {
       </div>
     </div>
   );
-}; 
+};

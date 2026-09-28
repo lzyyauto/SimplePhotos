@@ -1,284 +1,211 @@
+"""One-level, metadata-only reconciliation for a folder.
+
+The media volume is never modified here. Media decoding belongs to the
+thumbnail worker, so a first visit can return file rows promptly.
 """
-FolderService：文件夹内容验证（补偿机制）。
 
-设计说明：
-  当用户打开一个文件夹时，后台异步验证该文件夹的 DB 记录
-  是否与实际文件系统一致，处理新增/删除的文件和子文件夹。
-
-缓存策略：
-  _validation_cache 和 _validation_locks 是类变量（Class Variable），
-  所有请求共享同一份缓存，跨实例有效。
-  这是关键设计：FolderService 在每次请求中都会 new 一个新实例，
-  如果缓存放在实例变量上，每次缓存都是空的，补偿扫描会对每次
-  打开文件夹都触发一次文件系统 IO，在几千个文件夹的规模下
-  会造成明显的延迟。
-
-适用部署场景：
-  NAS + Docker volume 挂载（FileWatcher 在此场景无效）。
-  文件变更主要通过：
-    1. 启动时全量扫描
-    2. 手动触发 /api/scan
-    3. 本机制在用户浏览时发现并修复轻微的差异
-"""
-import asyncio
+import hashlib
+import mimetypes
 import os
 import threading
-from datetime import datetime
-from typing import Dict, Set, Tuple
+from collections import deque
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from pathlib import Path
 
 from app.config import settings
+from app.database.database import SessionLocal
 from app.database.models import Folder, Image
-from app.models import FolderInfo
-from app.services.file_service import FileService
-from app.services.image_service import ImageService
 from app.utils.logger import logger
-from cachetools import TTLCache
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import load_only
+
+
+@dataclass
+class ReconcileResult:
+    scanned: bool = False
+    discovered: int = 0
+    updated: int = 0
+    error: str | None = None
 
 
 class FolderService:
-
-    # ----------------------------------------------------------------
-    # 类变量：所有请求/实例共享，进程生命周期内持续有效
-    # - maxsize=10000: 覆盖几千个文件夹绰绰有余
-    # - ttl=3600: 1小时内访问过的文件夹不重复扫描
-    #   （NAS 场景下文件不会频繁变动，1小时足够）
-    # ----------------------------------------------------------------
-    _validation_cache: TTLCache = TTLCache(maxsize=10000, ttl=3600)
-    _validation_locks: Dict[int, asyncio.Lock] = {}
-
-    # 保护 _validation_locks 字典本身的线程安全
-    # （asyncio.Lock 只保护协程并发，字典操作需要 threading.Lock）
-    _lock_registry_mutex = threading.Lock()
-
-    def __init__(self, db: Session):
-        self.db = db
-        self.file_service = FileService(db)
-
-    # ----------------------------------------------------------------
-    # 公开接口
-    # ----------------------------------------------------------------
-
-    async def validate_folder_content(self, folder_id: int) -> None:
-        """
-        异步验证文件夹内容（幂等、带缓存）。
-
-        流程：
-          命中缓存 → 直接返回
-          未命中   → 获取锁 → 再次检查缓存（防止并发重复扫描）
-                   → 扫描文件系统 → 与 DB 对比 → 处理差异 → 写入缓存
-        """
-        # 快速路径：缓存命中，跳过扫描
-        if folder_id in self._validation_cache:
-            return
-
-        lock = self._get_or_create_lock(folder_id)
-
-        # 如果已经有协程在验证这个文件夹，直接返回，避免重复工作
-        if lock.locked():
-            return
-
-        async with lock:
-            # Double-check：可能在等锁期间缓存已被写入
-            if folder_id in self._validation_cache:
-                return
-
-            try:
-                folder = self.db.query(Folder).filter(
-                    Folder.id == folder_id
-                ).first()
-                if not folder:
-                    return
-
-                # folder_path 是相对路径，拼接 IMAGES_DIR 得到绝对路径
-                abs_folder_path = os.path.join(
-                    str(settings.IMAGES_DIR), folder.folder_path
-                )
-
-                if not os.path.exists(abs_folder_path):
-                    logger.warning(f"文件夹不存在于文件系统: {abs_folder_path}")
-                    return
-
-                real_files, real_folders = self._scan_folder_content(abs_folder_path)
-                db_files = self._get_db_files(folder_id)
-                db_folders = self._get_db_folders(folder_id)
-
-                new_files = real_files - db_files
-                deleted_files = db_files - real_files
-                new_folders = real_folders - db_folders
-                deleted_folders = db_folders - real_folders
-
-                has_changes = new_files or deleted_files or new_folders or deleted_folders
-
-                if has_changes:
-                    logger.info(
-                        f"文件夹 {folder.folder_path} 发现变更: "
-                        f"+{len(new_files)}文件 -{len(deleted_files)}文件 "
-                        f"+{len(new_folders)}文件夹 -{len(deleted_folders)}文件夹"
-                    )
-
-                    for file_path in new_files:
-                        await self._process_new_file(file_path, folder_id)
-
-                    for subfolder_path in new_folders:
-                        await self._process_new_folder(subfolder_path, folder_id)
-
-                    for file_path in deleted_files:
-                        self._process_deleted_file(file_path)
-
-                    for subfolder_path in deleted_folders:
-                        self._process_deleted_folder(subfolder_path)
-                else:
-                    logger.debug(f"文件夹验证通过（无变更）: {folder.folder_path}")
-
-                # 写入缓存（无论有无变更都写，避免频繁扫描）
-                self._validation_cache[folder_id] = datetime.now()
-
-            except Exception as e:
-                logger.error(f"验证文件夹内容失败 folder_id={folder_id}: {str(e)}", exc_info=True)
-            finally:
-                # 验证完成后清理锁，释放内存
-                self._remove_lock(folder_id)
+    _locks: dict[int, threading.Lock] = {}
+    _registry_lock = threading.Lock()
 
     @classmethod
-    def invalidate_cache(cls, folder_id: int) -> None:
-        """
-        手动使某个文件夹的缓存失效。
-        在 /api/scan 全量扫描后应调用此方法清空所有缓存。
-        """
-        cls._validation_cache.pop(folder_id, None)
-
-    @classmethod
-    def clear_all_cache(cls) -> None:
-        """清空所有文件夹的验证缓存（全量扫描后调用）"""
-        cls._validation_cache.clear()
-        logger.info("已清空所有文件夹验证缓存")
-
-    # ----------------------------------------------------------------
-    # 内部工具方法
-    # ----------------------------------------------------------------
-
-    def _get_or_create_lock(self, folder_id: int) -> asyncio.Lock:
-        """线程安全地获取或创建 folder_id 对应的 asyncio.Lock"""
-        with self._lock_registry_mutex:
-            if folder_id not in self._validation_locks:
-                self._validation_locks[folder_id] = asyncio.Lock()
-            return self._validation_locks[folder_id]
-
-    def _remove_lock(self, folder_id: int) -> None:
-        """验证完成后移除锁，控制内存占用"""
-        with self._lock_registry_mutex:
-            self._validation_locks.pop(folder_id, None)
-
-    def _scan_folder_content(self, abs_folder_path: str) -> Tuple[Set[str], Set[str]]:
-        """
-        扫描实际文件系统（只扫一层，不递归）。
-        返回的路径均为相对于 IMAGES_DIR 的相对路径，与 DB 存储格式一致。
-        """
-        real_files: Set[str] = set()
-        real_folders: Set[str] = set()
-
-        try:
-            for entry in os.scandir(abs_folder_path):
-                rel = os.path.relpath(entry.path, settings.IMAGES_DIR)
-                if entry.is_file(follow_symlinks=False) and self._is_supported_file(entry.name):
-                    real_files.add(rel)
-                elif entry.is_dir(follow_symlinks=False) and not entry.name.startswith((".", "@", "$")):
-                    real_folders.add(rel)
-        except PermissionError:
-            logger.warning(f"无读取权限: {abs_folder_path}")
-        except Exception as e:
-            logger.error(f"扫描文件夹失败 {abs_folder_path}: {str(e)}")
-
-        return real_files, real_folders
-
-    def _get_db_files(self, folder_id: int) -> Set[str]:
-        """获取 DB 中记录的文件相对路径集合"""
-        return {
-            image.file_path
-            for image in self.db.query(Image.file_path).filter(
-                Image.folder_id == folder_id
-            )
-        }
-
-    def _get_db_folders(self, folder_id: int) -> Set[str]:
-        """获取 DB 中记录的子文件夹相对路径集合"""
-        return {
-            f.folder_path
-            for f in self.db.query(Folder.folder_path).filter(
-                Folder.parent_id == folder_id
-            )
-        }
-
-    async def _process_new_file(self, rel_path: str, folder_id: int) -> None:
-        """处理新增文件（相对路径）"""
-        try:
-            full_path = os.path.join(str(settings.IMAGES_DIR), rel_path)
-            file_info = self.file_service.get_file_info(full_path)
-            image_service = ImageService(self.db)
-            await image_service.process_image(file_info, folder_id)
-            self.db.commit()
-            logger.info(f"补偿：新增文件 {rel_path}")
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"处理新文件失败 {rel_path}: {str(e)}")
-
-    async def _process_new_folder(self, rel_path: str, parent_id: int) -> None:
-        """处理新增文件夹（相对路径）"""
-        try:
-            full_path = os.path.join(str(settings.IMAGES_DIR), rel_path)
-            folder_info = self.file_service.get_folder_info(full_path)
-            folder = self.file_service.save_folder(folder_info, self.db, root_id=parent_id)
-            if folder:
-                self.db.commit()
-                logger.info(f"补偿：新增文件夹 {rel_path}")
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"处理新文件夹失败 {rel_path}: {str(e)}")
-
-    def _process_deleted_file(self, rel_path: str) -> None:
-        """处理已删除文件"""
-        try:
-            deleted = self.db.query(Image).filter(
-                Image.file_path == rel_path
-            ).delete()
-            if deleted:
-                self.db.commit()
-                logger.info(f"补偿：删除文件记录 {rel_path}")
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"删除文件记录失败 {rel_path}: {str(e)}")
-
-    def _process_deleted_folder(self, rel_path: str) -> None:
-        """
-        处理已删除文件夹。
-        删除该文件夹及其所有子文件夹记录（依赖 DB 外键 CASCADE）。
-        """
-        try:
-            folder = self.db.query(Folder).filter(
-                Folder.folder_path == rel_path
-            ).first()
-            if not folder:
-                return
-
-            # 递归删除子文件夹缓存（让它们下次会重新验证）
-            subfolders = self.db.query(Folder).filter(
-                Folder.parent_id == folder.id
-            ).all()
-            for subfolder in subfolders:
-                self._process_deleted_folder(subfolder.folder_path)
-
-            # 删除图片记录（Folder 上有 cascade='all, delete-orphan'，
-            # 删 Folder 时 SQLAlchemy 会自动级联删 Image，
-            # 但显式操作更清晰且避免 N+1 问题）
-            self.db.query(Image).filter(Image.folder_id == folder.id).delete()
-            self.db.delete(folder)
-            self.db.commit()
-            logger.info(f"补偿：删除文件夹记录 {rel_path}")
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"删除文件夹记录失败 {rel_path}: {str(e)}")
+    def _folder_lock(cls, folder_id: int) -> threading.Lock:
+        with cls._registry_lock:
+            return cls._locks.setdefault(folder_id, threading.Lock())
 
     @staticmethod
-    def _is_supported_file(filename: str) -> bool:
-        return any(filename.lower().endswith(ext) for ext in settings.SUPPORTED_FORMATS)
+    def _version(path: str, size: int, mtime_ns: int) -> str:
+        payload = f"v2\0{path}\0{size}\0{mtime_ns}".encode("utf-8")
+        return hashlib.sha256(payload).hexdigest()
+
+    @staticmethod
+    def _media_type(name: str) -> str | None:
+        mime = mimetypes.guess_type(name)[0]
+        if mime:
+            return mime
+        if name.lower().endswith((".heic", ".heif")):
+            return "image/heic"
+        return None
+
+    def reconcile_folder(self, folder_id: int, *, force: bool = False,
+                         priority: int = 0, retry_failed: bool = False) -> ReconcileResult:
+        result = ReconcileResult()
+        with self._folder_lock(folder_id):
+            with SessionLocal() as db:
+                folder = db.get(Folder, folder_id)
+                if folder is None or folder.missing_since is not None:
+                    result.error = "目录不存在于索引中"
+                    return result
+                if (not force and folder.last_scanned_at is not None
+                        and datetime.utcnow() - folder.last_scanned_at
+                        < timedelta(seconds=settings.FOLDER_RESCAN_SECONDS)):
+                    if priority:
+                        promoted = db.query(Image).filter(
+                            Image.folder_id == folder_id,
+                            Image.thumbnail_status.in_(("pending", "failed")),
+                            Image.thumbnail_priority < priority,
+                        ).update({Image.thumbnail_priority: priority}, synchronize_session=False)
+                        if promoted:
+                            db.commit()
+                    return result
+                relative_folder = folder.folder_path
+
+            absolute_folder = settings.IMAGES_DIR / relative_folder
+            files: dict[str, tuple[int, int, str | None]] = {}
+            directories: dict[str, str] = {}
+            try:
+                with os.scandir(absolute_folder) as entries:
+                    for entry in entries:
+                        rel = os.path.relpath(entry.path, settings.IMAGES_DIR)
+                        if entry.is_dir(follow_symlinks=False):
+                            if not entry.name.startswith((".", "@", "$")):
+                                directories[rel] = entry.name
+                        elif (entry.is_file(follow_symlinks=False)
+                              and entry.name.lower().endswith(tuple(settings.SUPPORTED_FORMATS))):
+                            stat = entry.stat(follow_symlinks=False)
+                            files[rel] = (stat.st_size, stat.st_mtime_ns,
+                                          self._media_type(entry.name))
+            except (OSError, ValueError) as exc:
+                logger.warning("目录扫描失败 folder_id=%s: %s", folder_id, exc)
+                result.error = "目录读取失败，已保留原索引"
+                return result
+
+            with SessionLocal() as db:
+                folder = db.get(Folder, folder_id)
+                existing_files = {
+                    image.file_path: image
+                    for image in db.query(Image).options(load_only(
+                        Image.id, Image.file_path, Image.size_bytes, Image.mtime_ns,
+                        Image.thumbnail_path, Image.converted_path, Image.thumbnail_status,
+                        Image.thumbnail_version, Image.missing_since,
+                    )).filter(Image.folder_id == folder_id)
+                }
+                existing_folders = {
+                    child.folder_path: child
+                    for child in db.query(Folder).filter(Folder.parent_id == folder_id)
+                }
+                # If a mounted media root disappears and Docker exposes an empty
+                # directory, do not interpret that as a mass deletion.
+                if (relative_folder == "." and not files and not directories
+                        and (existing_files or existing_folders)):
+                    result.error = "媒体根目录突然为空，已保留原索引"
+                    logger.error(result.error)
+                    return result
+
+                now = datetime.utcnow()
+                for path, name in directories.items():
+                    child = existing_folders.get(path)
+                    if child is None:
+                        db.add(Folder(folder_path=path, name=name, parent_id=folder_id))
+                    else:
+                        if child.missing_since is not None:
+                            self._set_subtree_missing(db, path, None)
+                for path, child in existing_folders.items():
+                    if path not in directories and child.missing_since is None:
+                        self._set_subtree_missing(db, path, now)
+
+                for path, (size, mtime_ns, mime) in files.items():
+                    version = self._version(path, size, mtime_ns)
+                    image = existing_files.get(path)
+                    if image is None:
+                        db.add(Image(
+                            folder_id=folder_id, file_path=path, mime_type=mime,
+                            image_type="video" if mime and mime.startswith("video/") else "original",
+                            is_heic=path.lower().endswith((".heic", ".heif")),
+                            size_bytes=size, mtime_ns=mtime_ns,
+                            thumbnail_version=version, thumbnail_status="pending",
+                            thumbnail_priority=priority, thumbnail_attempts=0,
+                        ))
+                        result.discovered += 1
+                        continue
+                    image.missing_since = None
+                    was_unindexed = image.mtime_ns is None
+                    changed = (image.size_bytes is not None and
+                               (image.size_bytes != size or image.mtime_ns != mtime_ns))
+                    image.size_bytes = size
+                    image.mtime_ns = mtime_ns
+                    image.mime_type = mime
+                    image.is_heic = path.lower().endswith((".heic", ".heif"))
+                    thumbnail_missing = (not image.thumbnail_path or not (
+                        settings.THUMBNAIL_DIR / image.thumbnail_path
+                    ).is_file())
+                    legacy_stale = False
+                    if was_unindexed and image.thumbnail_path and not thumbnail_missing:
+                        try:
+                            legacy_stale = (
+                                (settings.THUMBNAIL_DIR / image.thumbnail_path).stat().st_mtime_ns
+                                < mtime_ns
+                            )
+                        except OSError:
+                            legacy_stale = True
+                    converted_missing = (image.is_heic and (
+                        not image.converted_path or not (
+                            settings.CONVERTED_DIR / image.converted_path
+                        ).is_file()
+                    ))
+                    cache_lost = (image.thumbnail_status == "ready" and
+                                  (thumbnail_missing or converted_missing))
+                    requested_retry = retry_failed and image.thumbnail_status == "failed"
+                    if changed or legacy_stale or cache_lost or requested_retry:
+                        image.thumbnail_status = "pending"
+                        image.thumbnail_priority = priority
+                        image.thumbnail_attempts = 0
+                        image.thumbnail_error = None
+                        image.thumbnail_retry_at = None
+                        result.updated += 1
+                    elif image.thumbnail_status == "pending" and image.thumbnail_version is None:
+                        # An existing cache from before this migration remains valid.
+                        image.thumbnail_status = "ready"
+                    image.thumbnail_version = version
+
+                for path, image in existing_files.items():
+                    if path not in files and image.missing_since is None:
+                        image.missing_since = now
+                folder.last_scanned_at = now
+                db.commit()
+                result.scanned = True
+        return result
+
+    @staticmethod
+    def _set_subtree_missing(db, path: str, missing_since: datetime | None) -> None:
+        root = db.query(Folder).filter(Folder.folder_path == path).first()
+        if root is None:
+            return
+        descendants = []
+        queue = deque([root])
+        while queue:
+            folder = queue.popleft()
+            descendants.append(folder)
+            queue.extend(db.query(Folder).filter(Folder.parent_id == folder.id).all())
+        ids = [folder.id for folder in descendants]
+        for folder in descendants:
+            folder.missing_since = missing_since
+            folder.last_scanned_at = None
+        if ids:
+            db.query(Image).filter(Image.folder_id.in_(ids)).update(
+                {Image.missing_since: missing_since}, synchronize_session=False
+            )

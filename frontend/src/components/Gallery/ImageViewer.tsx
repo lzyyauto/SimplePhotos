@@ -2,6 +2,7 @@ import { Image } from '@/types';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useEffect, useCallback, useState, useRef } from 'react';
 import { TransformWrapper, TransformComponent } from 'react-zoom-pan-pinch';
+import type { ReactZoomPanPinchRef } from 'react-zoom-pan-pinch';
 import { useSwipeable } from 'react-swipeable';
 
 interface ImageViewerProps {
@@ -16,7 +17,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
   const [isZoomed, setIsZoomed] = useState(false);
   
   // 添加 ref 来获取 transform 实例
-  const transformRef = useRef<any>(null);
+  const transformRef = useRef<ReactZoomPanPinchRef>(null);
 
   // 获取当前图片索引
   const currentIndex = image ? images.findIndex(img => img.id === image.id) : -1;
@@ -77,7 +78,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
   const displayPath = image.converted_path || image.file_path;
 
   // 格式化 EXIF 数据显示
-  const formatExifData = (exif: any) => {
+  const formatExifData = (exif: Record<string, string>) => {
     const importantFields = {
       Make: '相机品牌',
       Model: '相机型号',
@@ -135,7 +136,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
             >
               <h3 className="text-lg font-semibold mb-2">图片信息</h3>
               <div className="space-y-2">
-                {formatExifData(image.exif_data).map(({ label, value }) => (
+                {formatExifData(image.exif_data ?? {}).map(({ label, value }) => (
                   <div key={label} className="flex justify-between">
                     <span className="text-white/70">{label}:</span>
                     <span>{String(value)}</span>
@@ -166,7 +167,9 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
           className="max-w-[90vw] max-h-[90vh] relative" 
           onClick={e => e.stopPropagation()}
         >
-          {image && image.file_path && image.file_path.toLowerCase().endsWith('.mp4') ? (
+          {image.is_heic && image.thumbnail_status !== 'ready' ? (
+            <div className="text-white text-sm p-8">原图处理中，请稍候</div>
+          ) : image && image.file_path && image.file_path.toLowerCase().endsWith('.mp4') ? (
             <div 
               className="relative max-w-[90vw] max-h-[90vh]" 
               onClick={e => e.stopPropagation()}
@@ -191,7 +194,7 @@ export const ImageViewer = ({ image, images, onClose, onNavigate }: ImageViewerP
               initialScale={1}
               minScale={0.5}
               maxScale={4}
-              onTransformed={(ref: any) => {
+              onTransformed={(ref) => {
                 setIsZoomed(ref.state.scale !== 1);
               }}
               doubleClick={{
