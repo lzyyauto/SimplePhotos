@@ -17,7 +17,7 @@ This project was initially created as a personal solution for managing my photos
 
 ## Tech Stack
 
-- **Backend**: Python, FastAPI, SQLite, SQLAlchemy, Pillow, pyheif, ExifRead
+- **Backend**: Python, FastAPI, PostgreSQL/SQLite, SQLAlchemy, Pillow, pillow-heif
 - **Frontend**: React (TypeScript), Vite
 
 ## Quick Start
@@ -27,21 +27,26 @@ services:
   simplephotos:
     image: lzyyauto/simplephotos:latest
     ports:
-      - "5173:5173"
+      - "8000:8000"
     volumes:
-      - /path/to/your/data:/app/data
+      - /path/to/your/app-data:/app/data
+      - /path/to/your/photos:/app/data/images:ro
     environment:
       - NODE_ENV=production
       - LANG=zh_CN.UTF-8
       - LC_ALL=zh_CN.UTF-8
       - DATA_ROOT=/app/data
-      - SCAN_WORKERS=4
-      - SCAN_CHUNK_SIZE=20
+      - THUMBNAIL_WORKERS=1
+      - BACKGROUND_SCAN_SECONDS=21600
+      - CACHE_GC_ENABLED=false
+      - CACHE_GC_MIN_AGE_DAYS=30
 
 volumes:
   data:
     driver: local
 ```
+
+Pushing a `vX.Y.Z` release tag publishes one multi-platform Docker Hub image for `linux/amd64` and `linux/arm64`. Stable versions also update `latest`; Docker selects the matching image for the host. Verify the published manifest with `docker buildx imagetools inspect lzyyauto/simplephotos:latest`.
 
 ## Future Outlook
 

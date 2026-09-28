@@ -3,11 +3,13 @@ import { Fragment, useState } from 'react'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { useToastStore } from '../../stores/toastStore'
 import { api } from '../../services/api'
+import { useQueryClient } from '@tanstack/react-query'
 
 export const SettingsMenu = () => {
   const { title, desktopColumns, mobileColumns, setTitle, setDesktopColumns, setMobileColumns } = useSettingsStore()
   const { addToast } = useToastStore()
   const [isLoading, setIsLoading] = useState(false)
+  const queryClient = useQueryClient()
   const MIN_COLUMNS = 1
   const MAX_COLUMNS = 12
 
@@ -18,9 +20,17 @@ export const SettingsMenu = () => {
 
     try {
       const response = await api.post('/scan')
-      if (response.status === 'success') {
-        const message = `扫描完成！\n处理了 ${response.data.folders_processed} 个文件夹\n${response.data.images_processed} 张图片`
-        addToast(message, 'success', 3000)
+      let progress = await api.getScanStatus(response.run_id)
+      while (progress.status === 'pending' || progress.status === 'running') {
+        await new Promise(resolve => setTimeout(resolve, 1500))
+        progress = await api.getScanStatus(response.run_id)
+      }
+      await queryClient.invalidateQueries({ queryKey: ['folders'] })
+      await queryClient.invalidateQueries({ queryKey: ['folder-images'] })
+      if (progress.status === 'completed') {
+        addToast(`目录核对完成：${progress.folders_scanned} 个文件夹，新增 ${progress.images_discovered} 张图片；缩略图继续在后台处理`, 'success', 6000)
+      } else {
+        addToast(`扫描部分完成：${progress.error || '请检查后端日志'}`, 'error', 6000)
       }
     } catch (error) {
       console.error('刷新库失败:', error)

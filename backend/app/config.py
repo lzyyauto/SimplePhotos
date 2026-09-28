@@ -60,9 +60,15 @@ class Settings(BaseSettings):
     API_THUMBNAILS_PATH: str = "/data/thumbnails"
     API_CONVERTED_PATH: str = "/data/converted"
 
-    # 扫描处理配置 - 使用简单的环境变量覆盖
-    SCAN_WORKERS: int = int(os.getenv('SCAN_WORKERS', os.cpu_count() or 4))
-    SCAN_CHUNK_SIZE: int = int(os.getenv('SCAN_CHUNK_SIZE', 20))
+    # 一层目录核对与低速后台扫描
+    FOLDER_RESCAN_SECONDS: int = 60
+    BACKGROUND_SCAN_SECONDS: int = 6 * 60 * 60
+    SCAN_DIRECTORY_PAUSE_SECONDS: float = 0.2
+    THUMBNAIL_MAX_RETRIES: int = 3
+    THUMBNAIL_WORKERS: int = 1
+    CACHE_GC_ENABLED: bool = False
+    CACHE_GC_MIN_AGE_DAYS: int = 30
+    CACHE_GC_INTERVAL_SECONDS: int = 24 * 60 * 60
 
 
     def __init__(self):
@@ -76,7 +82,6 @@ class Settings(BaseSettings):
             print(f"  PG_DATABASE: {self.PG_DATABASE}")
             # 密码不输出，只显示是否已设置
             print(f"  PG_PASSWORD: {'***' if self.PG_PASSWORD else '(empty)'}")
-        print(f"  DATABASE_URL: {self.DATABASE_URL}")
 
         print(f"\n路径配置:")
         print(f"  BASE_DIR: {self.BASE_DIR}")
@@ -86,13 +91,14 @@ class Settings(BaseSettings):
         print(f"  CACHE_DIR: {self.CACHE_DIR}")
 
         print(f"\n扫描配置:")
-        print(f"  SCAN_WORKERS: {self.SCAN_WORKERS}")
-        print(f"  SCAN_CHUNK_SIZE: {self.SCAN_CHUNK_SIZE}")
+        print(f"  THUMBNAIL_WORKERS: {self.THUMBNAIL_WORKERS}")
+        print(f"  BACKGROUND_SCAN_SECONDS: {self.BACKGROUND_SCAN_SECONDS}")
+        print(f"  CACHE_GC_ENABLED: {self.CACHE_GC_ENABLED}")
 
     def setup_directories(self) -> None:
         """确保所有必要的目录存在，不存在则创建"""
         for path in [
-                self.DATA_DIR, self.IMAGES_DIR, self.CACHE_DIR,
+                self.DATA_DIR, self.CACHE_DIR,
                 self.THUMBNAIL_DIR, self.CONVERTED_DIR, self.LOGS_DIR
         ]:
             path.mkdir(parents=True, exist_ok=True)

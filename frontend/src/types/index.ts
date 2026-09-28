@@ -6,9 +6,12 @@ export interface Image {
   image_type: string;
   mime_type?: string;
   file_path: string;
-  thumbnail_path: string;
+  thumbnail_path: string | null;
+  thumbnail_status: 'pending' | 'processing' | 'ready' | 'failed';
+  thumbnail_retryable: boolean;
+  thumbnail_error?: string | null;
   converted_path: string | null;
-  exif_data?: Record<string, any>;
+  exif_data?: Record<string, string>;
 }
 
 export interface Folder {
@@ -25,4 +28,5 @@ export interface PaginatedResponse<T> {
   page: number;
   total_pages: number;
   page_size: number;
-} 
+  scan_error?: string | null;
+}

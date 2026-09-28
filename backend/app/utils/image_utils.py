@@ -1,7 +1,6 @@
 import os
 
 import cv2
-import numpy as np
 from app.config import settings
 from app.utils.logger import logger
 from PIL import Image
@@ -15,41 +14,44 @@ register_heif_opener()
 class ImageProcessor:
 
     @staticmethod
-    async def create_thumbnail(image_path: str, thumb_path: str):
+    def create_thumbnail(image_path: str, thumb_path: str):
         """创建缩略图"""
         try:
             # 修正 endswith 方法的使用，使用元组作为参数
             if image_path.lower().endswith(('.mp4', '.mov')):
                 # 处理视频文件
-                await ImageProcessor._create_video_thumbnail(
+                ImageProcessor._create_video_thumbnail(
                     image_path, thumb_path)
             elif image_path.lower().endswith('.gif'):
                 # 处理 GIF 文件
-                await ImageProcessor._create_gif_thumbnail(
+                ImageProcessor._create_gif_thumbnail(
                     image_path, thumb_path)
             elif image_path.lower().endswith(('.heic', '.heif')):
                 # 处理 HEIC/HEIF 文件 - 注意这里不需要转换，因为转换已经在 image_service 中完成
-                await ImageProcessor._create_image_thumbnail(
+                ImageProcessor._create_image_thumbnail(
                     image_path, thumb_path)
             else:
                 # 处理普通图片
-                await ImageProcessor._create_image_thumbnail(
+                ImageProcessor._create_image_thumbnail(
                     image_path, thumb_path)
         except Exception as e:
             logger.error(f"创建缩略图失败 {image_path}: {str(e)}")
             raise
 
     @staticmethod
-    async def _create_video_thumbnail(video_path: str, thumb_path: str):
+    def _create_video_thumbnail(video_path: str, thumb_path: str):
         """从视频创建缩略图"""
         try:
             cap = cv2.VideoCapture(video_path)
-            if not cap.isOpened():
-                raise Exception("无法打开视频文件")
+            try:
+                if not cap.isOpened():
+                    raise Exception("无法打开视频文件")
 
-            ret, frame = cap.read()
-            if not ret:
-                raise Exception("无法读取视频帧")
+                ret, frame = cap.read()
+                if not ret:
+                    raise Exception("无法读取视频帧")
+            finally:
+                cap.release()
 
             # 转换 BGR 到 RGB
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -60,24 +62,20 @@ class ImageProcessor:
             # 确保目标目录存在
             os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
             img.save(thumb_path, "JPEG", quality=95)
-            cap.release()
 
         except Exception as e:
             logger.error(f"创建视频缩略图失败: {str(e)}")
             raise
 
     @staticmethod
-    async def _create_gif_thumbnail(gif_path: str, thumb_path: str):
+    def _create_gif_thumbnail(gif_path: str, thumb_path: str):
         """从GIF创建缩略图"""
         try:
             with Image.open(gif_path) as img:
                 # 获取第一帧
                 img.seek(0)
                 # 转换为RGB模式
-                if img.mode in ('RGBA', 'P'):
-                    first_frame = img.convert('RGB')
-                else:
-                    first_frame = img.copy()
+                first_frame = img.convert('RGB')
 
                 first_frame.thumbnail(settings.THUMBNAIL_SIZE)
 
@@ -89,11 +87,11 @@ class ImageProcessor:
             raise
 
     @staticmethod
-    async def _create_image_thumbnail(image_path: str, thumb_path: str):
+    def _create_image_thumbnail(image_path: str, thumb_path: str):
         """创建普通图片缩略图"""
         try:
             with Image.open(image_path) as img:
-                if img.mode in ('RGBA', 'P'):
+                if img.mode != 'RGB':
                     img = img.convert('RGB')
                 img.thumbnail(settings.THUMBNAIL_SIZE)
 
@@ -105,10 +103,10 @@ class ImageProcessor:
             raise
 
     @staticmethod
-    async def convert_heic(heic_path: str, jpg_path: str):
+    def convert_heic(heic_path: str, jpg_path: str):
         """转换HEIC为JPEG"""
         with Image.open(heic_path) as img:
-            if img.mode == 'RGBA':
+            if img.mode != 'RGB':
                 img = img.convert('RGB')
             img.save(jpg_path, "JPEG")
 

@@ -5,22 +5,24 @@ services:
       - "8000:8000"
     volumes:
       - /Users/zingliu/Code/SimplePhotos/data:/app/data
-      - /Volumes/Pic:/app/data/images
+      - /Volumes/Pic:/app/data/images:ro
     environment:
       - NODE_ENV=production
       - LANG=zh_CN.UTF-8
       - LC_ALL=zh_CN.UTF-8
       - DATA_ROOT=/app/data
       - IMAGES_DIR=/app/data/images
-      - SCAN_WORKERS=4                # 扫描线程数，建议设置为 CPU 核心数的 2-4 倍
-      - SCAN_CHUNK_SIZE=20            # 每个分片的文件数
-      # 数据库配置：使用 postgresql（或注释掉改用默认 sqlite）
-      - DB_TYPE=postgresql
-      - PG_HOST=localhost
-      - PG_PORT=5432
-      - PG_USER=postgres
-      - PG_PASSWORD=
-      - PG_DATABASE=simplephotos
+      - THUMBNAIL_WORKERS=1           # 硬盘挂载先保持低并发
+      - BACKGROUND_SCAN_SECONDS=21600 # 每六小时低速核对一次
+      - CACHE_GC_ENABLED=false       # 先查看缓存盘点报告，再启用自动清理
+      - CACHE_GC_MIN_AGE_DAYS=30
+      # 连接参数由部署环境提供，不写入镜像或仓库
+      - DB_TYPE=${DB_TYPE:-postgresql}
+      - PG_HOST=${PG_HOST:?Set PG_HOST in the deployment environment}
+      - PG_PORT=${PG_PORT:-5432}
+      - PG_USER=${PG_USER:-postgres}
+      - PG_PASSWORD=${PG_PASSWORD:?Set PG_PASSWORD in the deployment environment}
+      - PG_DATABASE=${PG_DATABASE:-simplephotos}
     deploy:
       resources:
         limits:

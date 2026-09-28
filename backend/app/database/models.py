@@ -5,8 +5,8 @@ SQLAlchemy ORM Model 唯一定义文件。
 import os
 from datetime import datetime
 
-from sqlalchemy import (Boolean, Column, DateTime, ForeignKey, Integer, JSON,
-                        String, Text)
+from sqlalchemy import (BigInteger, Boolean, Column, DateTime, ForeignKey, Integer,
+                        JSON, String, Text)
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 
@@ -36,6 +36,8 @@ class Folder(Base):
     )
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_scanned_at = Column(DateTime, nullable=True)
+    missing_since = Column(DateTime, nullable=True)
 
     parent = relationship("Folder", remote_side=[id], backref="subfolders")
     images = relationship("Image", back_populates="folder", cascade="all, delete-orphan")
@@ -66,6 +68,16 @@ class Image(Base):
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    size_bytes = Column(BigInteger, nullable=True)
+    mtime_ns = Column(BigInteger, nullable=True)
+    missing_since = Column(DateTime, nullable=True)
+    thumbnail_status = Column(String(16), nullable=False, default="pending", server_default="pending")
+    thumbnail_version = Column(String(64), nullable=True)
+    thumbnail_priority = Column(Integer, nullable=False, default=0, server_default="0")
+    thumbnail_attempts = Column(Integer, nullable=False, default=0, server_default="0")
+    thumbnail_error = Column(Text, nullable=True)
+    thumbnail_started_at = Column(DateTime, nullable=True)
+    thumbnail_retry_at = Column(DateTime, nullable=True)
 
     folder = relationship("Folder", back_populates="images")
 
@@ -79,3 +91,16 @@ class FailedImage(Base):
     error_message = Column(Text, nullable=True)
     retry_count = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ScanRun(Base):
+    __tablename__ = "scan_runs"
+
+    id = Column(Integer, primary_key=True)
+    status = Column(String(16), nullable=False, default="pending")
+    folders_scanned = Column(Integer, nullable=False, default=0)
+    images_discovered = Column(Integer, nullable=False, default=0)
+    images_updated = Column(Integer, nullable=False, default=0)
+    error = Column(Text, nullable=True)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)

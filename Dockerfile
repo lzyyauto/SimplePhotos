@@ -8,7 +8,7 @@ WORKDIR /build/frontend
 # 先复制 package.json，利用 Docker layer 缓存
 # 只要 package.json 不变，npm install 层就不会重新执行
 COPY frontend/package*.json ./
-RUN npm ci --prefer-offline
+RUN npm ci --prefer-offline --include=optional
 
 # 复制源码并构建
 COPY frontend/ ./
@@ -21,7 +21,7 @@ RUN npm run build
 # =============================================================================
 FROM python:3.11-slim AS python-builder
 
-# 安装编译 Python 包所需的系统依赖（pillow-heif/pyheif 需要 libheif）
+# 安装编译 Python 包所需的系统依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libheif-dev \
     build-essential \

@@ -41,7 +41,8 @@ export const Folder = () => {
     data: foldersData,
     fetchNextPage: fetchNextFolders,
     hasNextPage: hasMoreFolders,
-    isFetchingNextPage: isFetchingFolders
+    isFetchingNextPage: isFetchingFolders,
+    isLoading: isFoldersLoading
   } = useInfiniteQuery({
     queryKey: ['folders', folderId],
     queryFn: async ({ pageParam = 1 }) => {
@@ -56,6 +57,7 @@ export const Folder = () => {
       return nextPage;
     },
     initialPageParam: 1,
+    refetchInterval: 5 * 60 * 1000,
   });
 
   // 无限加载图片
@@ -63,7 +65,8 @@ export const Folder = () => {
     data: imagesData,
     fetchNextPage: fetchNextImages,
     hasNextPage: hasMoreImages,
-    isFetchingNextPage: isFetchingImages
+    isFetchingNextPage: isFetchingImages,
+    isLoading: isImagesLoading
   } = useInfiniteQuery({
     queryKey: ['folder-images', folderId],
     queryFn: ({ pageParam = 1 }) => api.getFolderImages(folderId, pageParam),
@@ -72,6 +75,11 @@ export const Folder = () => {
       return lastPage.page < lastPage.total_pages ? lastPage.page + 1 : undefined;
     },
     initialPageParam: 1,
+    refetchInterval: (query) => {
+      const images: Image[] = query.state.data?.pages?.flatMap(page => page.items || []) ?? [];
+      if (images.some(image => image.thumbnail_status === 'pending' || image.thumbnail_status === 'processing')) return 2000;
+      return images.some(image => image.thumbnail_retryable) ? 15000 : 5 * 60 * 1000;
+    },
   });
 
   // 监听文件夹底部
@@ -91,7 +99,7 @@ export const Folder = () => {
         console.error('Error loading folders:', error);
       });
     }
-  }, [foldersEndVisible, hasMoreFolders, isFetchingFolders]);
+  }, [foldersEndVisible, hasMoreFolders, isFetchingFolders, foldersData?.pages?.length, fetchNextFolders]);
 
   // 监听图片底部
   useEffect(() => {
@@ -99,7 +107,7 @@ export const Folder = () => {
       console.log('Loading more images...');
       fetchNextImages();
     }
-  }, [imagesEndVisible, hasMoreImages, isFetchingImages]);
+  }, [imagesEndVisible, hasMoreImages, isFetchingImages, fetchNextImages]);
 
   // 合并所有文件夹数据
   const allFolders = foldersData?.pages?.flatMap(page => {
@@ -137,6 +145,12 @@ export const Folder = () => {
   return (
     <div className="h-[calc(100vh-4rem)] overflow-y-auto hide-scrollbar bg-gray-50/50 dark:bg-[#0B0F19] transition-colors duration-300">
       <div className="p-4 md:p-6 lg:p-8 max-w-7xl mx-auto pb-12">
+        {(isFoldersLoading || isImagesLoading) && <div className="flex justify-center"><Spinner /></div>}
+        {(foldersData?.pages[0]?.scan_error || imagesData?.pages[0]?.scan_error) && (
+          <div className="mb-6 text-sm text-amber-700 dark:text-amber-300">
+            {foldersData?.pages[0]?.scan_error || imagesData?.pages[0]?.scan_error}
+          </div>
+        )}
         {/* 返回按钮 */}
         <button
           onClick={() => navigate(-1)}
@@ -207,8 +221,13 @@ export const Folder = () => {
         )}
 
         {/* 图片查看器 */}
+        {!isFoldersLoading && !isImagesLoading && allFolders.length === 0 && allImages.length === 0 && (
+          <div className="text-center text-gray-500 py-16">
+            {imagesData?.pages[0]?.scan_error || foldersData?.pages[0]?.scan_error || '此目录暂无图片或子文件夹'}
+          </div>
+        )}
         <ImageViewer
-          image={selectedImage}
+          image={allImages.find(image => image.id === selectedImage?.id) ?? selectedImage}
           images={allImages}
           onClose={() => setSelectedImage(null)}
           onNavigate={handleImageNavigation}
