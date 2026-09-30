@@ -114,6 +114,41 @@ class LibraryFlowTest(unittest.TestCase):
         self.assertEqual(self.wait_image(folder_id)["thumbnail_path"], first_path)
         self.assertEqual(len(list((self.root / "cache" / "thumbnails").rglob("*.jpg"))), first_count)
 
+    def test_album_cover_uses_nested_thumbnail_and_ignores_removed_media(self):
+        nested = self.album / "nested"
+        nested.mkdir()
+        later = nested / "z-last.jpg"
+        photo = nested / "cover #1.jpg"
+        Image.new("RGB", (80, 80), "red").save(later)
+        Image.new("RGB", (80, 80), "blue").save(photo)
+        self.start_server()
+
+        album_id = self.folder_id()
+        self.assertIsNone(
+            self.get("/api/folders/1/subfolders")["items"][0]["cover_thumbnail_path"]
+        )
+        nested_id = self.get(f"/api/folders/{album_id}/subfolders")["items"][0]["id"]
+        for _ in range(100):
+            images = self.get(f"/api/folders/{nested_id}/images")["items"]
+            if len(images) == 2 and all(image["thumbnail_status"] == "ready" for image in images):
+                break
+            time.sleep(0.1)
+        else:
+            self.fail("album thumbnails did not become ready")
+        thumbnail = images[0]["thumbnail_path"]
+        self.assertIn("cover%20%231.jpg", images[0]["file_path"])
+
+        album = self.get("/api/folders/1/subfolders")["items"][0]
+        self.assertEqual(album["cover_thumbnail_path"], thumbnail)
+        self.assertTrue(album["cover_thumbnail_path"].startswith("/data/thumbnails/"))
+        self.assertNotIn("/data/images/", album["cover_thumbnail_path"])
+
+        photo.unlink()
+        later.unlink()
+        self.get(f"/api/folders/{nested_id}/images")
+        album = self.get("/api/folders/1/subfolders")["items"][0]
+        self.assertIsNone(album["cover_thumbnail_path"])
+
     def test_modify_move_and_cache_cleanup(self):
         original = self.album / "one.jpg"
         Image.new("RGB", (80, 80), "red").save(original)
@@ -212,6 +247,34 @@ class LibraryFlowTest(unittest.TestCase):
                 "SELECT thumbnail_attempts FROM images WHERE file_path='album/broken.jpg'"
             ).fetchone()[0]
         self.assertEqual(attempts, 1)
+
+    def test_thumbnail_progress_excludes_missing_images_and_counts_failures(self):
+        Image.new("RGB", (80, 80), "red").save(self.album / "good.jpg")
+        broken = self.album / "broken.jpg"
+        broken.write_bytes(b"not a jpeg")
+        self.start_server()
+        folder_id = self.folder_id()
+
+        for _ in range(100):
+            images = self.get(f"/api/folders/{folder_id}/images")["items"]
+            statuses = {Path(image["file_path"]).name: image["thumbnail_status"]
+                        for image in images}
+            if statuses == {"broken.jpg": "failed", "good.jpg": "ready"}:
+                break
+            time.sleep(0.1)
+        else:
+            self.fail(f"unexpected thumbnail statuses: {statuses}")
+
+        self.assertEqual(self.get("/api/thumbnail-progress"), {
+            "total": 2, "ready": 1, "pending": 0, "processing": 0,
+            "failed": 1, "remaining": 1,
+        })
+        broken.unlink()
+        self.get(f"/api/folders/{folder_id}/images")
+        self.assertEqual(self.get("/api/thumbnail-progress"), {
+            "total": 1, "ready": 1, "pending": 0, "processing": 0,
+            "failed": 0, "remaining": 0,
+        })
 
 
 if __name__ == "__main__":

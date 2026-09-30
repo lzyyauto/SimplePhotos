@@ -1,8 +1,14 @@
-import type { Folder, Image, PaginatedResponse } from '../types';
+import type { Folder, Image, PaginatedResponse, ThumbnailProgress } from '../types';
 
 const API_BASE = '/api';
 
 export const api = {
+  async getThumbnailProgress(): Promise<ThumbnailProgress> {
+    const response = await fetch(`${API_BASE}/thumbnail-progress`, { cache: 'no-store' });
+    if (!response.ok) throw new Error('读取缩略图进度失败');
+    return response.json();
+  },
+
   async getFolders(parentId: number, page: number = 1): Promise<PaginatedResponse<Folder>> {
     const response = await fetch(
       `${API_BASE}/folders/${parentId}/subfolders?page=${page}`

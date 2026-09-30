@@ -10,11 +10,14 @@ interface FolderGridProps {
 
 export const FolderGrid = ({ folders, onFolderClick }: FolderGridProps) => {
   const { desktopColumns, mobileColumns } = useSettingsStore();
-  const [columns, setColumns] = useState(mobileColumns);
+  const [columns, setColumns] = useState(Math.min(mobileColumns, 2));
 
   useEffect(() => {
     const updateColumns = () => {
-      setColumns(window.innerWidth >= 768 ? desktopColumns : mobileColumns);
+      // Album covers need enough width for long folder names, even when photos use many columns.
+      setColumns(window.innerWidth >= 768
+        ? Math.min(desktopColumns, 4)
+        : Math.min(mobileColumns, 2));
     };
 
     // 初始化
@@ -40,4 +43,4 @@ export const FolderGrid = ({ folders, onFolderClick }: FolderGridProps) => {
       ))}
     </div>
   );
-}; 
+};

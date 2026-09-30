@@ -27,8 +27,9 @@ export const SettingsMenu = () => {
       }
       await queryClient.invalidateQueries({ queryKey: ['folders'] })
       await queryClient.invalidateQueries({ queryKey: ['folder-images'] })
+      await queryClient.invalidateQueries({ queryKey: ['thumbnail-progress'] })
       if (progress.status === 'completed') {
-        addToast(`目录核对完成：${progress.folders_scanned} 个文件夹，新增 ${progress.images_discovered} 张图片；缩略图继续在后台处理`, 'success', 6000)
+        addToast(`目录核对完成：${progress.folders_scanned} 个文件夹，新增 ${progress.images_discovered} 张图片；缩略图进度见页面顶部`, 'success', 6000)
       } else {
         addToast(`扫描部分完成：${progress.error || '请检查后端日志'}`, 'error', 6000)
       }

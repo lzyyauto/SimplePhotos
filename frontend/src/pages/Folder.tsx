@@ -151,17 +151,6 @@ export const Folder = () => {
             {foldersData?.pages[0]?.scan_error || imagesData?.pages[0]?.scan_error}
           </div>
         )}
-        {/* 返回按钮 */}
-        <button
-          onClick={() => navigate(-1)}
-          className="mb-8 flex items-center text-sm font-medium text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white transition-colors bg-white/50 hover:bg-white dark:bg-white/5 dark:hover:bg-white/10 px-4 py-2 rounded-xl w-fit shadow-sm border border-black/5 dark:border-white/5 backdrop-blur-sm"
-        >
-          <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
-          </svg>
-          返回
-        </button>
-
         {/* 文件夹区域 */}
         {allFolders.length > 0 && (
           <div className="mb-10">

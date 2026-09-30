@@ -19,6 +19,7 @@ export interface Folder {
   name: string;
   folder_path: string;
   parent_id: number | null;
+  cover_thumbnail_path: string | null;
   has_subfolders: boolean;
 }
 
@@ -29,4 +30,13 @@ export interface PaginatedResponse<T> {
   total_pages: number;
   page_size: number;
   scan_error?: string | null;
+}
+
+export interface ThumbnailProgress {
+  total: number;
+  ready: number;
+  pending: number;
+  processing: number;
+  failed: number;
+  remaining: number;
 }

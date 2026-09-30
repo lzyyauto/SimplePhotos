@@ -8,10 +8,48 @@ from app.database.models import Folder, Image, ScanRun
 from app.services.cache_maintenance import CacheMaintenance
 from app.services.folder_service import FolderService
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session, aliased
 
 router = APIRouter()
+
+
+def _folder_cover_paths(db: Session, folder_ids: list[int]) -> dict[int, str]:
+    """Find one ready thumbnail per album from the existing index only."""
+    if not folder_ids:
+        return {}
+
+    descendants = select(
+        Folder.id.label("folder_id"), Folder.id.label("album_id")
+    ).where(Folder.id.in_(folder_ids)).cte("album_descendants", recursive=True)
+    child = aliased(Folder)
+    descendants = descendants.union_all(
+        select(child.id, descendants.c.album_id)
+        .join(descendants, child.parent_id == descendants.c.folder_id)
+        .where(child.missing_since.is_(None))
+    )
+    first_images = (
+        select(descendants.c.album_id, func.min(Image.file_path).label("file_path"))
+        .join(Image, Image.folder_id == descendants.c.folder_id)
+        .where(
+            Image.missing_since.is_(None),
+            Image.thumbnail_status == "ready",
+            Image.thumbnail_path.is_not(None),
+            Image.thumbnail_path != "",
+        )
+        .group_by(descendants.c.album_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(first_images.c.album_id, Image.thumbnail_path)
+        .join(Image, Image.file_path == first_images.c.file_path)
+    ).all()
+    return {
+        album_id: f"/data/thumbnails/{quote(path, safe='/')}"
+        for album_id, path in rows
+    }
 
 
 def _build_image_dict(image: Image) -> dict:
@@ -97,8 +135,15 @@ async def get_subfolders(
     folders = query.order_by(Folder.name.asc(), Folder.id.asc()).offset(
         (page - 1) * settings.PAGE_SIZE
     ).limit(settings.PAGE_SIZE).all()
+    covers = _folder_cover_paths(db, [folder.id for folder in folders])
     return {
-        "items": folders,
+        "items": [
+            {
+                **jsonable_encoder(folder),
+                "cover_thumbnail_path": covers.get(folder.id),
+            }
+            for folder in folders
+        ],
         "total": count,
         "page": page,
         "total_pages": ceil(count / settings.PAGE_SIZE),
@@ -133,6 +178,26 @@ async def get_image_full(image_id: int, db: Session = Depends(get_db)):
 async def trigger_full_scan(request: Request):
     run_id = request.app.state.library_worker.request_scan()
     return {"status": "pending", "run_id": run_id}
+
+
+@router.get("/thumbnail-progress")
+async def get_thumbnail_progress(db: Session = Depends(get_db)):
+    counts = {"ready": 0, "pending": 0, "processing": 0, "failed": 0}
+    rows = (
+        db.query(Image.thumbnail_status, func.count(Image.id))
+        .filter(Image.missing_since.is_(None))
+        .group_by(Image.thumbnail_status)
+        .all()
+    )
+    for status, count in rows:
+        if status in counts:
+            counts[status] = count
+    total = sum(count for _, count in rows)
+    return {
+        "total": total,
+        **counts,
+        "remaining": total - counts["ready"],
+    }
 
 
 @router.get("/scan/{run_id}")
